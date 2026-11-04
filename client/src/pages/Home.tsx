@@ -67,15 +67,16 @@ export default function Home() {
     if (!socket) return;
 
     const handleUserOnline = () => {
-      loadUsers();
-    };
-
-    const handleUserOffline = ({ userId }: { userId: number }) => {
-      setUsers(prev => prev.filter(u => u.id !== userId));
+      // Only reload if the user currently has no cards on screen
+      setUsers(prev => {
+        if (prev.length === 0 || currentIndex >= prev.length) {
+          loadUsers();
+        }
+        return prev;
+      });
     };
 
     socket.on('user_online', handleUserOnline);
-    socket.on('user_offline', handleUserOffline);
     socket.on('match_notification', (match: any) => {
       setMatchUser(match.user);
       setShowMatch(true);
@@ -95,10 +96,9 @@ export default function Home() {
     });
     return () => {
       socket.off('user_online', handleUserOnline);
-      socket.off('user_offline', handleUserOffline);
       socket.off('match_notification');
     };
-  }, [socket, loadUsers]);
+  }, [socket, loadUsers, currentIndex]);
 
   const handleSwipe = async (direction: 'like' | 'dislike' | 'superlike') => {
     if (currentIndex >= users.length) return;
@@ -205,10 +205,10 @@ export default function Home() {
                 <circle cx="12" cy="10" r="3" />
               </svg>
             </div>
-            <h2>Ninguem online no momento</h2>
-            <p>Assim que outra pessoa cadastrada entrar no site, ela aparecera aqui automaticamente!</p>
+            <h2>Sem novos perfis por enquanto</h2>
+            <p>Quando novas pessoas se cadastrarem no site, elas aparecerão aqui!</p>
             <button onClick={loadUsers} className="reload-btn">
-              Atualizar agora
+              Buscar novamente
             </button>
           </div>
         ) : (

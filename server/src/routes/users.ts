@@ -82,28 +82,34 @@ router.get('/discover', authenticateToken, async (req: AuthRequest, res: Respons
     const maxAge = currentUser.maxAge || 100;
     const genderPreference = currentUser.genderPreference || 'Todos';
 
-    // Get IDs of users already swiped
+    // Get IDs of users already swiped by current user
     const swipes = await prisma.swipe.findMany({
       where: { swiperId: userId },
       select: { swipedId: true }
     });
-    const swipedIds = new Set(swipes.map(s => s.swipedId));
-    swipedIds.add(userId); // Exclude self
+    const swipedIds = swipes.map(s => s.swipedId);
+    swipedIds.push(userId); // Exclude self
 
-    // Only include users who are currently ONLINE and haven't been swiped yet
-    const onlineTargetIds = getOnlineUserIds().filter(id => !swipedIds.has(id));
-
-    if (onlineTargetIds.length === 0) {
-      return res.json([]);
-    }
+    // Find users who have already liked the current user (prioritize them like Tinder!)
+    const incomingLikes = await prisma.swipe.findMany({
+      where: {
+        swipedId: userId,
+        direction: { in: ['like', 'superlike'] }
+      },
+      select: { swiperId: true }
+    });
+    const likedMeIds = new Set(incomingLikes.map(s => s.swiperId));
+    const onlineIds = new Set(getOnlineUserIds());
 
     const users = await prisma.user.findMany({
       where: {
-        id: { in: onlineTargetIds },
+        id: { notIn: swipedIds },
         age: { gte: minAge, lte: maxAge },
         name: { not: '' },
         NOT: { email: { endsWith: '@demo.com' } },
-        ...(genderPreference !== 'Todos' ? { gender: genderPreference } : {})
+        ...(genderPreference !== 'Todos'
+          ? { OR: [{ gender: genderPreference }, { gender: '' }, { gender: null }] }
+          : {})
       },
       select: {
         id: true, name: true, bio: true, age: true, gender: true,
@@ -149,20 +155,25 @@ router.get('/discover', authenticateToken, async (req: AuthRequest, res: Respons
         favoritePlace: u.favoritePlace,
         currentEvent: u.currentEvent,
         affinityScore,
-        distance
+        distance,
+        likedMe: likedMeIds.has(u.id),
+        isOnline: onlineIds.has(u.id)
       };
     });
 
     const filteredUsers = maxDist >= 500 ? mappedUsers : mappedUsers.filter(u => u.distance <= maxDist);
 
+    // Sort like Tinder: 1) People who already liked me, 2) Online users, 3) Affinity, 4) Distance
     filteredUsers.sort((a, b) => {
+      if (a.likedMe !== b.likedMe) return a.likedMe ? -1 : 1;
+      if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1;
       if (b.affinityScore !== a.affinityScore) {
         return b.affinityScore - a.affinityScore;
       }
       return a.distance - b.distance;
     });
 
-    res.json(filteredUsers.slice(0, 20));
+    res.json(filteredUsers.slice(0, 50));
   } catch (err) {
     console.error('Discover error:', err);
     res.status(500).json({ error: 'Erro ao buscar usuários' });
