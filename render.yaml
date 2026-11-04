@@ -3,17 +3,10 @@ services:
     name: matchvibe
     env: node
     plan: free
-    buildCommand: npm install && npm run build && cd server && npx prisma db push --accept-data-loss
+    buildCommand: npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
-    disk:
-      name: matchvibe-data
-      mountPath: /opt/render/project/src/data
-      sizeGB: 1
-  - type: web
-    name: matchvibe-dummy
-    env: node
-    # The uploads folder also needs a disk if we use local uploads. 
-    # Render Free tier doesn't allow multiple disks on one service, so we mount data/ and move uploads inside data/ or use a combined path.
+      - key: DATABASE_URL
+        sync: false

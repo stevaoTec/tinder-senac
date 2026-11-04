@@ -34,9 +34,13 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const newSocket = io(window.location.hostname === 'localhost'
-      ? 'http://localhost:3001'
-      : window.location.origin, {
+    const socketUrl = import.meta.env.VITE_API_URL
+      ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
+      : window.location.hostname === 'localhost'
+        ? 'http://localhost:3001'
+        : window.location.origin;
+
+    const newSocket = io(socketUrl, {
       auth: { token }
     });
 

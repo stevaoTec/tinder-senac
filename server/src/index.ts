@@ -11,15 +11,32 @@ import swipeRoutes from './routes/swipes';
 import matchRoutes from './routes/matches';
 import messageRoutes from './routes/messages';
 import { setupSocket } from './socket/chat';
+import { ensureSeedUsers } from './database/seed';
 
 const app = express();
 const server = http.createServer(app);
+
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    if (
+      !origin ||
+      origin.includes('localhost') ||
+      origin.includes('127.0.0.1') ||
+      origin.endsWith('.vercel.app') ||
+      origin.endsWith('.onrender.com') ||
+      (process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL)
+    ) {
+      callback(null, true);
+    } else {
+      callback(null, true);
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true
+};
+
 const io = new Server(server, {
-  cors: {
-    origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    credentials: true
-  }
+  cors: corsOptions
 });
 
 // Ensure required directories exist
@@ -32,11 +49,8 @@ dirs.forEach(dir => {
 });
 
 // Middleware
-app.use(cors({
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
-  credentials: true
-}));
-app.use(express.json());
+app.use(cors(corsOptions));
+app.use(express.json({ limit: '10mb' }));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 
@@ -89,4 +103,5 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log('  http://localhost:' + PORT);
   console.log('=========================================');
   console.log('');
+  ensureSeedUsers();
 });

@@ -78,14 +78,55 @@ export default function Profile() {
     }, 1200);
   };
 
+  const compressImageFile = (file: File, maxDimension: number): Promise<File> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return resolve(file);
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) return resolve(file);
+              resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
+            },
+            'image/jpeg',
+            0.82
+          );
+        };
+        img.onerror = () => resolve(file);
+        img.src = event.target?.result as string;
+      };
+      reader.onerror = () => resolve(file);
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handlePhotoUpload = async (file: File, type: 'profile' | 'cover') => {
     try {
+      const compressed = await compressImageFile(file, type === 'profile' ? 800 : 1000);
       if (type === 'profile') {
-        const { profilePhoto } = await api.uploadProfilePhoto(file);
-        updateUser({ ...user!, profilePhoto });
+        const { profilePhoto, photos } = await api.uploadProfilePhoto(compressed);
+        updateUser({ ...user!, profilePhoto, ...(photos ? { photos } : {}) });
         setMessage('Foto de perfil atualizada');
       } else {
-        const { coverPhoto } = await api.uploadCoverPhoto(file);
+        const { coverPhoto } = await api.uploadCoverPhoto(compressed);
         updateUser({ ...user!, coverPhoto });
         setMessage('Foto de capa atualizada');
       }
@@ -148,7 +189,7 @@ export default function Profile() {
       <div className="profile-header">
         <div
           className="cover-photo"
-          style={getCoverImage() ? { backgroundImage: `url(${getCoverImage()})` } : {}}
+          style={getCoverImage() ? { backgroundImage: `url("${getCoverImage()}")` } : {}}
           onClick={() => coverInputRef.current?.click()}
         >
           <div className="cover-overlay">

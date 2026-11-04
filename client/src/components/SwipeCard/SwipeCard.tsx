@@ -113,7 +113,7 @@ export default function SwipeCard({ user, onSwipe, isBehind }: SwipeCardProps) {
       <div
         className="card-image"
         style={{
-          backgroundImage: getProfileImage() ? `url(${getProfileImage()})` : undefined
+          backgroundImage: getProfileImage() ? `url("${getProfileImage()}")` : undefined
         }}
       >
         {!getProfileImage() && (

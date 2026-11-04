@@ -23,26 +23,8 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return Math.round(R * c); // Distance in km
 }
 
-// Ensure upload directories exist
-const uploadsBase = path.join(__dirname, '../../uploads');
-['profiles', 'covers'].forEach(dir => {
-  const dirPath = path.join(uploadsBase, dir);
-  if (!fs.existsSync(dirPath)) {
-    fs.mkdirSync(dirPath, { recursive: true });
-  }
-});
-
-// Multer configuration
-const storage = multer.diskStorage({
-  destination: (_req, file, cb) => {
-    const dir = file.fieldname === 'profilePhoto' ? 'profiles' : 'covers';
-    cb(null, path.join(uploadsBase, dir));
-  },
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${uuidv4()}${ext}`);
-  }
-});
+// Multer configuration - Memory storage to save photos as Base64 in the database
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
@@ -212,14 +194,14 @@ router.put('/profile', authenticateToken, async (req: AuthRequest, res: Response
   }
 });
 
-// POST /api/users/profile/photo - Upload profile photo
+// POST /api/users/profile/photo - Upload profile photo (saved as Base64 in DB)
 router.post('/profile/photo', authenticateToken, upload.single('profilePhoto'), async (req: AuthRequest, res: Response) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Nenhum arquivo enviado' });
   }
 
   try {
-    const photoUrl = `/uploads/profiles/${req.file.filename}`;
+    const photoUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
     const userId = req.userId as number;
     
     const user = await prisma.user.findUnique({
@@ -227,10 +209,8 @@ router.post('/profile/photo', authenticateToken, upload.single('profilePhoto'), 
       select: { photos: true }
     });
 
-    const photos = JSON.parse(user?.photos || '[]');
-    if (!photos.includes(photoUrl)) {
-      photos.push(photoUrl);
-    }
+    const existingPhotos: string[] = JSON.parse(user?.photos || '[]');
+    const photos = [photoUrl, ...existingPhotos.filter(p => p !== photoUrl)].slice(0, 5);
 
     await prisma.user.update({
       where: { id: userId },
@@ -247,14 +227,14 @@ router.post('/profile/photo', authenticateToken, upload.single('profilePhoto'), 
   }
 });
 
-// POST /api/users/profile/cover - Upload cover photo
+// POST /api/users/profile/cover - Upload cover photo (saved as Base64 in DB)
 router.post('/profile/cover', authenticateToken, upload.single('coverPhoto'), async (req: AuthRequest, res: Response) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Nenhum arquivo enviado' });
   }
 
   try {
-    const coverUrl = `/uploads/covers/${req.file.filename}`;
+    const coverUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
     const userId = req.userId as number;
     
     await prisma.user.update({

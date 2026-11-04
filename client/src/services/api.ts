@@ -1,6 +1,7 @@
 import { AuthResponse, Match, Message, SwipeResult, User } from '../types';
 
-const API_URL = '/api';
+export const BACKEND_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+const API_URL = `${BACKEND_URL}/api`;
 
 function getHeaders(): HeadersInit {
   const token = localStorage.getItem('token');
@@ -73,7 +74,7 @@ export async function updateProfile(data: Partial<User>): Promise<User> {
   return handleResponse<User>(res);
 }
 
-export async function uploadProfilePhoto(file: File): Promise<{ profilePhoto: string }> {
+export async function uploadProfilePhoto(file: File): Promise<{ profilePhoto: string; photos?: string[] }> {
   const formData = new FormData();
   formData.append('profilePhoto', file);
   const token = localStorage.getItem('token');
