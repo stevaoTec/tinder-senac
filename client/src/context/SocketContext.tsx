@@ -48,6 +48,10 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       console.log('Socket conectado');
     });
 
+    newSocket.on('online_users_list', (ids: number[]) => {
+      setOnlineUsers(new Set(ids));
+    });
+
     newSocket.on('user_online', ({ userId }: { userId: number }) => {
       setOnlineUsers(prev => new Set(prev).add(userId));
     });

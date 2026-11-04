@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from '../database/prisma';
 import { generateToken, authenticateToken, AuthRequest } from '../middleware/auth';
+import { markUserActive } from '../socket/chat';
 
 const router = Router();
 
@@ -83,6 +84,7 @@ router.post('/register', async (req: Request, res: Response) => {
     });
 
     const token = generateToken(user.id);
+    markUserActive(user.id);
     
     const { password: _, ...userWithoutPassword } = user;
     const mappedUser = {
@@ -116,6 +118,7 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 
     const token = generateToken(user.id);
+    markUserActive(user.id);
     const { password: _, ...userWithoutPassword } = user;
     
     const mappedUser = {
@@ -169,6 +172,7 @@ router.post('/google', async (req: Request, res: Response) => {
         });
       }
       const token = generateToken(user.id);
+    markUserActive(user.id);
       const { password: _, ...userWithoutPassword } = user;
       
       const mappedUser = {
@@ -199,6 +203,7 @@ router.post('/google', async (req: Request, res: Response) => {
       });
 
       const token = generateToken(newUser.id);
+      markUserActive(newUser.id);
       
       const { password: _, ...userWithoutPassword } = newUser;
       const mappedUser = {
@@ -226,6 +231,7 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res: Response) => 
     if (!user) {
       return res.status(404).json({ error: 'Usuario nao encontrado' });
     }
+    markUserActive(user.id);
 
     const { password: _, ...userWithoutPassword } = user;
     const mappedUser = {

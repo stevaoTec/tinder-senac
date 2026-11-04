@@ -65,6 +65,17 @@ export default function Home() {
 
   useEffect(() => {
     if (!socket) return;
+
+    const handleUserOnline = () => {
+      loadUsers();
+    };
+
+    const handleUserOffline = ({ userId }: { userId: number }) => {
+      setUsers(prev => prev.filter(u => u.id !== userId));
+    };
+
+    socket.on('user_online', handleUserOnline);
+    socket.on('user_offline', handleUserOffline);
     socket.on('match_notification', (match: any) => {
       setMatchUser(match.user);
       setShowMatch(true);
@@ -82,8 +93,12 @@ export default function Home() {
         duration: 5000,
       });
     });
-    return () => { socket.off('match_notification'); };
-  }, [socket]);
+    return () => {
+      socket.off('user_online', handleUserOnline);
+      socket.off('user_offline', handleUserOffline);
+      socket.off('match_notification');
+    };
+  }, [socket, loadUsers]);
 
   const handleSwipe = async (direction: 'like' | 'dislike' | 'superlike') => {
     if (currentIndex >= users.length) return;
@@ -190,10 +205,10 @@ export default function Home() {
                 <circle cx="12" cy="10" r="3" />
               </svg>
             </div>
-            <h2>Ninguem por perto</h2>
-            <p>Aumente a sua Distancia Maxima no Perfil para ver mais pessoas.</p>
+            <h2>Ninguem online no momento</h2>
+            <p>Assim que outra pessoa cadastrada entrar no site, ela aparecera aqui automaticamente!</p>
             <button onClick={loadUsers} className="reload-btn">
-              Tentar novamente
+              Atualizar agora
             </button>
           </div>
         ) : (

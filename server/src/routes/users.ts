@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import { prisma } from '../database/prisma';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
+import { getOnlineUserIds, getOnlineUsersCount, markUserActive } from '../socket/chat';
 
 const router = Router();
 
@@ -57,10 +58,11 @@ const profileSchema = z.object({
   currentEvent: z.string().optional()
 });
 
-// GET /api/users/discover - Get users for swiping with Affinity and Real Location
+// GET /api/users/discover - Get ONLINE registered users for swiping
 router.get('/discover', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId as number;
+    markUserActive(userId);
     
     // Get current user to compare interests and location
     const currentUser = await prisma.user.findUnique({
@@ -85,15 +87,22 @@ router.get('/discover', authenticateToken, async (req: AuthRequest, res: Respons
       where: { swiperId: userId },
       select: { swipedId: true }
     });
-    const swipedIds = swipes.map(s => s.swipedId);
-    swipedIds.push(userId); // Exclude self
+    const swipedIds = new Set(swipes.map(s => s.swipedId));
+    swipedIds.add(userId); // Exclude self
+
+    // Only include users who are currently ONLINE and haven't been swiped yet
+    const onlineTargetIds = getOnlineUserIds().filter(id => !swipedIds.has(id));
+
+    if (onlineTargetIds.length === 0) {
+      return res.json([]);
+    }
 
     const users = await prisma.user.findMany({
       where: {
-        id: { notIn: swipedIds },
+        id: { in: onlineTargetIds },
         age: { gte: minAge, lte: maxAge },
-        profilePhoto: { not: '' },
         name: { not: '' },
+        NOT: { email: { endsWith: '@demo.com' } },
         ...(genderPreference !== 'Todos' ? { gender: genderPreference } : {})
       },
       select: {
@@ -114,7 +123,7 @@ router.get('/discover', authenticateToken, async (req: AuthRequest, res: Respons
         affinityScore = userInterests.filter((interest: string) => currentUserInterests.includes(interest)).length;
       }
 
-      let distance = Math.floor(Math.random() * 15) + 1;
+      let distance = 1;
       if (lat1 && lon1 && u.latitude && u.longitude) {
         distance = calculateDistance(lat1, lon1, u.latitude, u.longitude);
       }
@@ -259,7 +268,6 @@ router.get('/admin/stats', authenticateToken, async (req: AuthRequest, res: Resp
     }
     
     const totalUsers = await prisma.user.count();
-    const { getOnlineUsersCount } = require('../socket/chat');
     
     res.json({ 
       totalUsers, 
