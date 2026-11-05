@@ -329,9 +329,11 @@
   .desktop-nav {
     display: none;
   }
+
   .mobile-nav {
     display: flex;
   }
+
   .mobile-header {
     display: flex;
   }

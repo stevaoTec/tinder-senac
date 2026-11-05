@@ -41,22 +41,22 @@ export default function SwipeCard({ user, onSwipe, isBehind }: SwipeCardProps) {
 
     const threshold = 100;
     const velocityThreshold = 500;
-    
+
     // Superlike (swipe up)
     if (info.offset.y < -150 && Math.abs(info.offset.x) < 100) {
       await controls.start({ y: -1000, opacity: 0, transition: { duration: 0.3 } });
       onSwipe?.('superlike');
-    } 
+    }
     // Like (swipe right)
     else if (info.offset.x > threshold || info.velocity.x > velocityThreshold) {
       await controls.start({ x: 1000, opacity: 0, rotate: 30, transition: { duration: 0.3 } });
       onSwipe?.('like');
-    } 
+    }
     // Dislike (swipe left)
     else if (info.offset.x < -threshold || info.velocity.x < -velocityThreshold) {
       await controls.start({ x: -1000, opacity: 0, rotate: -30, transition: { duration: 0.3 } });
       onSwipe?.('dislike');
-    } 
+    }
     // Snap back
     else {
       controls.start({ x: 0, y: 0, rotate: 0, transition: { type: 'spring', stiffness: 300, damping: 20 } });
@@ -106,7 +106,7 @@ export default function SwipeCard({ user, onSwipe, isBehind }: SwipeCardProps) {
       {!isBehind && sharedInterests.length > 0 && (
         <div className="shared-badge">
           <svg viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+            <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
           </svg>
           {sharedInterests.length} {sharedInterests.length === 1 ? 'hobby' : 'hobbies'} em comum
         </div>
@@ -149,7 +149,7 @@ export default function SwipeCard({ user, onSwipe, isBehind }: SwipeCardProps) {
           {user.verified && (
             <span className="verified-badge" title="Verificado">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
               </svg>
             </span>
           )}
@@ -159,12 +159,12 @@ export default function SwipeCard({ user, onSwipe, isBehind }: SwipeCardProps) {
             </span>
           )}
         </div>
-        
+
         {user.distance && (
           <div className="card-distance">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
-              <circle cx="12" cy="10" r="3"/>
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
+              <circle cx="12" cy="10" r="3" />
             </svg>
             A {user.distance} km de voce
           </div>
@@ -176,7 +176,7 @@ export default function SwipeCard({ user, onSwipe, isBehind }: SwipeCardProps) {
             {user.currentEvent || user.favoritePlace}
           </div>
         )}
-        
+
         {user.vibeScore !== undefined && (
           <div className="card-vibe-score">
             🔥 Vibe Score: {user.vibeScore}
@@ -193,7 +193,7 @@ export default function SwipeCard({ user, onSwipe, isBehind }: SwipeCardProps) {
           {user.instagram && <span className="trait-badge">📸 @{user.instagram.replace('@', '')}</span>}
           {user.spotify && <span className="trait-badge">🎧 Spotify</span>}
         </div>
-        
+
         {user.interests && user.interests.length > 0 && (
           <div className="card-interests">
             {user.interests.map(interest => {
@@ -202,7 +202,7 @@ export default function SwipeCard({ user, onSwipe, isBehind }: SwipeCardProps) {
                 <span key={interest} className={`interest-tag ${isShared ? 'shared' : ''}`}>
                   {isShared && (
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: 12, height: 12, marginRight: 4 }}>
-                      <polyline points="20 6 9 17 4 12"/>
+                      <polyline points="20 6 9 17 4 12" />
                     </svg>
                   )}
                   {interest}

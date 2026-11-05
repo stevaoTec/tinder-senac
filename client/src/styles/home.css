@@ -200,7 +200,8 @@
 
 .rewind-btn {
   position: relative;
-  color: #f59e0b; /* yellow/gold */
+  color: #f59e0b;
+  /* yellow/gold */
   width: 50px;
   height: 50px;
   opacity: 0.55;
@@ -295,12 +296,12 @@
   .home-page {
     padding: 10px;
   }
-  
+
   .swipe-actions {
     margin-bottom: 0;
     padding: 10px;
   }
-  
+
   .action-btn {
     width: 50px;
     height: 50px;
@@ -310,7 +311,7 @@
     width: 20px;
     height: 20px;
   }
-  
+
   .like-btn {
     width: 58px;
     height: 58px;
@@ -536,8 +537,11 @@
 
 .premium-modal-overlay {
   position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.8);
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
   display: flex;
   align-items: center;
   justify-content: center;

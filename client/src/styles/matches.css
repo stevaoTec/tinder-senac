@@ -141,9 +141,20 @@
 }
 
 @keyframes starPulse {
-  0% { transform: scale(1); filter: drop-shadow(0 0 2px #d946ef); }
-  50% { transform: scale(1.25); filter: drop-shadow(0 0 8px #d946ef); }
-  100% { transform: scale(1); filter: drop-shadow(0 0 2px #d946ef); }
+  0% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 2px #d946ef);
+  }
+
+  50% {
+    transform: scale(1.25);
+    filter: drop-shadow(0 0 8px #d946ef);
+  }
+
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 2px #d946ef);
+  }
 }
 
 .match-avatar {
