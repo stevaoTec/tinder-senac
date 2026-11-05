@@ -12,13 +12,13 @@ import '../styles/skeleton.css';
 export default function Home() {
   const [users, setUsers] = useState<User[]>([]);
   const [dislikedUsers, setDislikedUsers] = useState<User[]>([]);
+  const [canRewindToday, setCanRewindToday] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [rewinding, setRewinding] = useState(false);
   const [matchUser, setMatchUser] = useState<User | null>(null);
   const [showMatch, setShowMatch] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
-  const [hasSwiped, setHasSwiped] = useState(false);
   const [showDislikedModal, setShowDislikedModal] = useState(false);
   const [showPremiumAlert, setShowPremiumAlert] = useState(false);
   const [showBlindDate, setShowBlindDate] = useState(false);
@@ -26,9 +26,9 @@ export default function Home() {
 
   const refreshDisliked = useCallback(async () => {
     try {
-      const list = await api.getDislikedUsers();
-      setDislikedUsers(list);
-      if (list.length > 0) setHasSwiped(true);
+      const data = await api.getDislikedUsers();
+      setDislikedUsers(data.users || []);
+      setCanRewindToday(Boolean(data.canRewindToday));
     } catch (err) {
       console.error('Erro ao buscar perfis recusados:', err);
     }
@@ -36,13 +36,13 @@ export default function Home() {
 
   const loadUsers = useCallback(async () => {
     try {
-      const [data, disliked] = await Promise.all([
+      const [data, dislikedData] = await Promise.all([
         api.discoverUsers(),
-        api.getDislikedUsers().catch(() => [])
+        api.getDislikedUsers().catch(() => ({ users: [], canRewindToday: true, rewindsRemainingToday: 1 }))
       ]);
       setUsers(data);
-      setDislikedUsers(disliked);
-      if (disliked.length > 0) setHasSwiped(true);
+      setDislikedUsers(dislikedData.users || []);
+      setCanRewindToday(Boolean(dislikedData.canRewindToday));
       setCurrentIndex(0);
     } catch (err) {
       console.error('Error loading users:', err);
@@ -138,7 +138,6 @@ export default function Home() {
 
     const targetUser = users[currentIndex];
     setCurrentIndex(prev => prev + 1);
-    setHasSwiped(true);
 
     if (direction === 'dislike') {
       setDislikedUsers(prev => [targetUser, ...prev.filter(u => u.id !== targetUser.id)]);
@@ -170,38 +169,63 @@ export default function Home() {
 
   const handleRewind = async () => {
     if (rewinding) return;
+    if (!canRewindToday) {
+      toast.error('⏳ Você já usou sua 1 chance de voltar hoje! Disponível novamente amanhã.');
+      return;
+    }
+    if (dislikedUsers.length === 0) {
+      toast('Você ainda não recusou ninguém para voltar.', { icon: '⏪' });
+      return;
+    }
+
     setRewinding(true);
     try {
       const response = await api.rewindSwipe();
       if (response.success && response.user) {
         placeUserAtCurrentCard(response.user);
-        toast.success(`Voltou para ${response.user.name}! Agora voce pode curtir 💖`, {
+        setCanRewindToday(false);
+        toast.success(`Voltou para ${response.user.name}! (1/1 chance de hoje usada) 💖`, {
           icon: '⏪',
-          duration: 3500
+          duration: 4000
         });
         refreshDisliked();
       }
     } catch (err: any) {
-      toast.error(err.message || 'Nenhum perfil anterior para voltar');
+      toast.error(err.message || 'Erro ao voltar perfil');
+      refreshDisliked();
     } finally {
       setRewinding(false);
     }
   };
 
   const handleRestoreSpecificUser = async (target: User) => {
+    if (!canRewindToday) {
+      toast.error('⏳ Você já usou sua 1 chance de voltar hoje! Disponível novamente amanhã.');
+      return;
+    }
     try {
       const res = await api.restoreDislikedUser(target.id);
       const restored = res.user || target;
       placeUserAtCurrentCard(restored);
+      setCanRewindToday(false);
       setShowDislikedModal(false);
-      toast.success(`${restored.name} voltou para a sua tela!`, { icon: '⏪' });
+      toast.success(`${restored.name} voltou para a sua tela! (Chance diária usada)`, { icon: '⏪' });
     } catch (err: any) {
-      toast.error('Erro ao voltar perfil');
+      toast.error(err.message || 'Você já usou sua 1 chance de voltar hoje!');
+      refreshDisliked();
     }
   };
 
   const handleLikeDirectlyFromDisliked = async (target: User) => {
+    if (!canRewindToday) {
+      toast.error('⏳ Você já usou sua 1 chance de voltar hoje! Disponível novamente amanhã.');
+      return;
+    }
     try {
+      // Consumes the 1x daily restore chance first
+      await api.restoreDislikedUser(target.id);
+      setCanRewindToday(false);
+
       const result = await api.swipeUser(target.id, 'like');
       setDislikedUsers(prev => prev.filter(u => u.id !== target.id));
       setShowDislikedModal(false);
@@ -212,21 +236,11 @@ export default function Home() {
         if (socket) {
           socket.emit('send_like', { targetUserId: target.id });
         }
-        toast.success(`Voce curtiu ${target.name}! 💖`);
+        toast.success(`Você voltou e curtiu ${target.name}! 💖 (Chance diária usada)`);
       }
     } catch (err: any) {
-      toast.error('Erro ao curtir perfil');
-    }
-  };
-
-  const handleRestoreAllDisliked = async () => {
-    try {
-      await api.restoreDislikedUser('all');
-      setShowDislikedModal(false);
-      await loadUsers();
-      toast.success('Todos os perfis que voce passou voltaram para a fila!', { icon: '🔄' });
-    } catch (err) {
-      toast.error('Erro ao restaurar perfis');
+      toast.error(err.message || 'Você já usou sua 1 chance de voltar hoje!');
+      refreshDisliked();
     }
   };
 
@@ -257,7 +271,7 @@ export default function Home() {
 
   const currentUser = users[currentIndex];
   const nextUser = users[currentIndex + 1];
-  const canRewind = dislikedUsers.length > 0 || hasSwiped;
+  const canUseRewindNow = canRewindToday && dislikedUsers.length > 0;
 
   return (
     <div className="home-page">
@@ -267,7 +281,7 @@ export default function Home() {
           onClick={() => setShowDislikedModal(true)}
         >
           <span className="btn-icon">⏪</span>
-          Quem não curti {dislikedUsers.length > 0 ? `(${dislikedUsers.length})` : ''}
+          Voltar ({canRewindToday ? '1/1 hoje' : '0/1 hoje'})
         </button>
         <button className="top-bar-btn gold-btn" onClick={() => setShowPremiumAlert(true)}>
           <span className="btn-icon">✨</span> Quem me curtiu
@@ -295,18 +309,20 @@ export default function Home() {
             <h2>Sem novos perfis por enquanto</h2>
             <p>
               {dislikedUsers.length > 0
-                ? `Você passou por ${dislikedUsers.length} ${dislikedUsers.length === 1 ? 'pessoa que não curtiu' : 'pessoas que não curtiu'}. Quer voltar e curtir?`
+                ? canRewindToday
+                  ? `Você tem 1 chance hoje para voltar uma pessoa que não curtiu!`
+                  : `Você já usou sua 1 chance de voltar hoje. Amanhã você poderá voltar mais 1 perfil!`
                 : 'Quando novas pessoas se cadastrarem no site, elas aparecerão aqui!'}
             </p>
             <div className="no-users-actions">
-              {canRewind && (
+              {dislikedUsers.length > 0 && canRewindToday && (
                 <button onClick={handleRewind} className="rewind-empty-btn" disabled={rewinding}>
-                  ⏪ Voltar {dislikedUsers[0]?.name ? `para ${dislikedUsers[0].name.split(' ')[0]}` : 'último perfil'}
+                  ⏪ Voltar {dislikedUsers[0]?.name ? `para ${dislikedUsers[0].name.split(' ')[0]}` : 'último perfil'} (1/1 hoje)
                 </button>
               )}
               {dislikedUsers.length > 0 && (
                 <button onClick={() => setShowDislikedModal(true)} className="review-disliked-btn">
-                  👀 Ver todos que não curti ({dislikedUsers.length})
+                  👀 Ver quem não curti ({canRewindToday ? '1 chance hoje' : 'Volta amanhã'})
                 </button>
               )}
               <button onClick={loadUsers} className="reload-btn">
@@ -333,22 +349,22 @@ export default function Home() {
       {currentIndex < users.length && (
         <div className="swipe-actions">
           <button
-            className={`action-btn rewind-btn ${canRewind ? 'can-rewind' : ''}`}
+            className={`action-btn rewind-btn ${canUseRewindNow ? 'can-rewind' : ''}`}
             onClick={handleRewind}
             title={
-              dislikedUsers[0]
-                ? `Voltar para ${dislikedUsers[0].name}`
-                : 'Voltar para a pessoa anterior'
+              !canRewindToday
+                ? 'Você já usou sua 1 chance de voltar hoje (disponível amanhã)'
+                : dislikedUsers[0]
+                  ? `Voltar para ${dislikedUsers[0].name} (1/1 hoje)`
+                  : 'Voltar para pessoa que não curtiu (1x por dia)'
             }
-            disabled={!canRewind || rewinding}
+            disabled={rewinding}
             id="rewind-button"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 11l5-5m-5 5l5 5m-5-5h12a5 5 0 015 5v3" />
             </svg>
-            {dislikedUsers.length > 0 && (
-              <span className="rewind-count-badge">{dislikedUsers.length}</span>
-            )}
+            <span className="rewind-count-badge">{canRewindToday ? '1' : '0'}</span>
           </button>
           <button
             className="action-btn dislike-btn"
@@ -383,14 +399,18 @@ export default function Home() {
         </div>
       )}
 
-      {/* Modal: Pessoas que você não curtiu mas quer voltar / curtir */}
+      {/* Modal: Pessoas que você não curtiu (Limite de 1 retorno por dia) */}
       {showDislikedModal && (
         <div className="premium-modal-overlay" onClick={() => setShowDislikedModal(false)}>
           <div className="disliked-modal" onClick={e => e.stopPropagation()}>
             <div className="disliked-modal-header">
               <div>
                 <h2>⏪ Quem você não curtiu</h2>
-                <p>Volte atrás se passou alguém sem querer!</p>
+                <p>
+                  {canRewindToday
+                    ? '🟢 Você tem 1 chance hoje para voltar atrás e curtir alguém!'
+                    : '⏳ Você já usou sua 1 chance de hoje. Nova chance liberada amanhã!'}
+                </p>
               </div>
               <button className="disliked-close-btn" onClick={() => setShowDislikedModal(false)}>
                 ✕
@@ -400,53 +420,49 @@ export default function Home() {
             {dislikedUsers.length === 0 ? (
               <div className="disliked-empty">
                 <span>✨</span>
-                <p>Você ainda não recusou ninguém ou já voltou todos os perfis!</p>
+                <p>Você ainda não recusou ninguém!</p>
               </div>
             ) : (
-              <>
-                <div className="disliked-list">
-                  {dislikedUsers.map(u => {
-                    const photo = getHighResImage(u.profilePhoto);
-                    return (
-                      <div key={u.id} className="disliked-item">
-                        <div className="disliked-avatar">
-                          {photo ? (
-                            <img src={photo} alt={u.name} referrerPolicy="no-referrer" />
-                          ) : (
-                            <span>{u.name.charAt(0)}</span>
-                          )}
-                        </div>
-                        <div className="disliked-info">
-                          <h4>{u.name}{u.age ? `, ${u.age}` : ''}</h4>
-                          {u.bio && <p>{u.bio}</p>}
-                        </div>
-                        <div className="disliked-item-actions">
-                          <button
-                            className="disliked-restore-btn"
-                            onClick={() => handleRestoreSpecificUser(u)}
-                            title="Colocar de volta na tela principal"
-                          >
-                            ⏪ Voltar
-                          </button>
-                          <button
-                            className="disliked-like-btn"
-                            onClick={() => handleLikeDirectlyFromDisliked(u)}
-                            title="Curtir agora mesmo"
-                          >
-                            💖 Curtir
-                          </button>
-                        </div>
+              <div className="disliked-list">
+                {dislikedUsers.map(u => {
+                  const photo = getHighResImage(u.profilePhoto);
+                  return (
+                    <div key={u.id} className="disliked-item">
+                      <div className="disliked-avatar">
+                        {photo ? (
+                          <img src={photo} alt={u.name} referrerPolicy="no-referrer" />
+                        ) : (
+                          <span>{u.name.charAt(0)}</span>
+                        )}
                       </div>
-                    );
-                  })}
-                </div>
-
-                {dislikedUsers.length > 1 && (
-                  <button className="restore-all-btn" onClick={handleRestoreAllDisliked}>
-                    🔄 Voltar todos os {dislikedUsers.length} perfis para a fila
-                  </button>
-                )}
-              </>
+                      <div className="disliked-info">
+                        <h4>{u.name}{u.age ? `, ${u.age}` : ''}</h4>
+                        {u.bio && <p>{u.bio}</p>}
+                      </div>
+                      <div className="disliked-item-actions">
+                        <button
+                          className="disliked-restore-btn"
+                          onClick={() => handleRestoreSpecificUser(u)}
+                          disabled={!canRewindToday}
+                          style={{ opacity: canRewindToday ? 1 : 0.45 }}
+                          title={canRewindToday ? 'Usar sua 1 chance do dia para voltar este card' : 'Disponível amanhã'}
+                        >
+                          ⏪ Voltar
+                        </button>
+                        <button
+                          className="disliked-like-btn"
+                          onClick={() => handleLikeDirectlyFromDisliked(u)}
+                          disabled={!canRewindToday}
+                          style={{ opacity: canRewindToday ? 1 : 0.45 }}
+                          title={canRewindToday ? 'Usar sua 1 chance do dia para curtir agora' : 'Disponível amanhã'}
+                        >
+                          💖 Curtir
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>

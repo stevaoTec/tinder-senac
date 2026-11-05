@@ -10,6 +10,14 @@ const swipeSchema = z.object({
   direction: z.enum(['like', 'dislike', 'superlike'])
 });
 
+function hasUsedRewindToday(lastRewindAt: Date | null | undefined): boolean {
+  if (!lastRewindAt) return false;
+  const tz = 'America/Sao_Paulo';
+  const lastDay = new Date(lastRewindAt).toLocaleDateString('pt-BR', { timeZone: tz });
+  const today = new Date().toLocaleDateString('pt-BR', { timeZone: tz });
+  return lastDay === today;
+}
+
 function formatUserCard(u: any) {
   const photos: string[] = JSON.parse(u.photos || '[]').map((p: string) =>
     p.replace(/=s\d+(-c)?$/, '=s800-c')
@@ -41,7 +49,7 @@ function formatUserCard(u: any) {
   };
 }
 
-// POST /api/swipes - Swipe on a user (supports updating a previous dislike to like)
+// POST /api/swipes - Swipe on a user
 router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const { targetUserId, direction } = swipeSchema.parse(req.body);
@@ -51,7 +59,6 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Você não pode curtir a si mesmo' });
     }
 
-    // Upsert swipe so a rewound or changed swipe never fails
     await prisma.swipe.upsert({
       where: {
         swiperId_swipedId: {
@@ -70,7 +77,6 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       }
     });
 
-    // Check for match if it was a like or superlike
     let matchResult = null;
     if (direction === 'like' || direction === 'superlike') {
       const mutualLike = await prisma.swipe.findFirst({
@@ -82,7 +88,6 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       });
 
       if (mutualLike) {
-        // Check if match already exists
         let match = await prisma.match.findFirst({
           where: {
             OR: [
@@ -131,64 +136,81 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   }
 });
 
-// GET /api/swipes/disliked - List all users passed/disliked by current user
+// GET /api/swipes/disliked - List disliked users + daily rewind availability (1x per day)
 router.get('/disliked', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId as number;
 
-    const dislikedSwipes = await prisma.swipe.findMany({
-      where: {
-        swiperId: userId,
-        direction: 'dislike'
-      },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        swiped: {
-          select: {
-            id: true, name: true, bio: true, age: true, gender: true,
-            profilePhoto: true, coverPhoto: true, photos: true, interests: true, verified: true,
-            relationshipIntent: true, zodiacSign: true, height: true, mbti: true,
-            instagram: true, spotify: true, vibeScore: true, favoritePlace: true, currentEvent: true,
-            email: true
+    const [currentUser, dislikedSwipes] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { lastRewindAt: true }
+      }),
+      prisma.swipe.findMany({
+        where: {
+          swiperId: userId,
+          direction: 'dislike'
+        },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          swiped: {
+            select: {
+              id: true, name: true, bio: true, age: true, gender: true,
+              profilePhoto: true, coverPhoto: true, photos: true, interests: true, verified: true,
+              relationshipIntent: true, zodiacSign: true, height: true, mbti: true,
+              instagram: true, spotify: true, vibeScore: true, favoritePlace: true, currentEvent: true,
+              email: true
+            }
           }
         }
-      }
-    });
+      })
+    ]);
 
+    const usedToday = hasUsedRewindToday(currentUser?.lastRewindAt);
     const users = dislikedSwipes
       .filter(s => s.swiped && !s.swiped.email.endsWith('@demo.com'))
       .map(s => formatUserCard(s.swiped));
 
-    res.json(users);
+    res.json({
+      users,
+      canRewindToday: !usedToday,
+      rewindsRemainingToday: usedToday ? 0 : 1
+    });
   } catch (error) {
     console.error('Get disliked users error:', error);
     res.status(500).json({ error: 'Erro ao buscar perfis recusados' });
   }
 });
 
-// POST /api/swipes/restore/:targetUserId - Restore a specific disliked user (or 'all') back to discover queue
+// POST /api/swipes/restore/:targetUserId - Restore 1 disliked user back to discover queue (max 1x per day)
 router.post('/restore/:targetUserId', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId as number;
-    const param = req.params.targetUserId;
+    const targetUserId = parseInt(req.params.targetUserId);
 
-    if (param === 'all') {
-      await prisma.swipe.deleteMany({
-        where: {
-          swiperId: userId,
-          direction: 'dislike'
-        }
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { lastRewindAt: true }
+    });
+
+    if (hasUsedRewindToday(currentUser?.lastRewindAt)) {
+      return res.status(429).json({
+        error: 'Você já usou sua 1 chance de voltar hoje! Tente novamente amanhã.'
       });
-      return res.json({ success: true, restoredAll: true });
     }
 
-    const targetUserId = parseInt(param);
-    await prisma.swipe.deleteMany({
-      where: {
-        swiperId: userId,
-        swipedId: targetUserId
-      }
-    });
+    await prisma.$transaction([
+      prisma.swipe.deleteMany({
+        where: {
+          swiperId: userId,
+          swipedId: targetUserId
+        }
+      }),
+      prisma.user.update({
+        where: { id: userId },
+        data: { lastRewindAt: new Date() }
+      })
+    ]);
 
     const restoredUser = await prisma.user.findUnique({
       where: { id: targetUserId }
@@ -196,7 +218,9 @@ router.post('/restore/:targetUserId', authenticateToken, async (req: AuthRequest
 
     res.json({
       success: true,
-      user: restoredUser ? formatUserCard(restoredUser) : null
+      user: restoredUser ? formatUserCard(restoredUser) : null,
+      canRewindToday: false,
+      rewindsRemainingToday: 0
     });
   } catch (error) {
     console.error('Restore swipe error:', error);
@@ -204,64 +228,57 @@ router.post('/restore/:targetUserId', authenticateToken, async (req: AuthRequest
   }
 });
 
-// DELETE /api/swipes/rewind - Undo the last dislike (or last swipe)
+// DELETE /api/swipes/rewind - Undo the last dislike (max 1x per day)
 router.delete('/rewind', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId as number;
 
-    // Prioritize undoing the most recent dislike first; fallback to any recent swipe
-    let lastSwipe = await prisma.swipe.findFirst({
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { lastRewindAt: true }
+    });
+
+    if (hasUsedRewindToday(currentUser?.lastRewindAt)) {
+      return res.status(429).json({
+        error: 'Você já usou sua 1 chance de voltar hoje! Tente novamente amanhã.'
+      });
+    }
+
+    const lastDislike = await prisma.swipe.findFirst({
       where: { swiperId: userId, direction: 'dislike' },
       orderBy: { createdAt: 'desc' }
     });
 
-    if (!lastSwipe) {
-      lastSwipe = await prisma.swipe.findFirst({
-        where: { swiperId: userId },
-        orderBy: { createdAt: 'desc' }
-      });
+    if (!lastDislike) {
+      return res.status(400).json({ error: 'Você ainda não recusou ninguém para voltar' });
     }
 
-    if (!lastSwipe) {
-      return res.status(400).json({ error: 'Nenhum perfil anterior para voltar' });
-    }
+    const { id: swipeId, swipedId } = lastDislike;
 
-    const { id: swipeId, swipedId, direction } = lastSwipe;
-
-    // If it was a like/superlike, check if it created a match and delete it
-    if (direction === 'like' || direction === 'superlike') {
-      const match = await prisma.match.findFirst({
-        where: {
-          OR: [
-            { user1Id: userId, user2Id: swipedId },
-            { user1Id: swipedId, user2Id: userId }
-          ]
-        }
-      });
-
-      if (match) {
-        await prisma.message.deleteMany({
-          where: { matchId: match.id }
-        });
-        await prisma.match.delete({
-          where: { id: match.id }
-        });
-      }
-    }
-
-    await prisma.swipe.delete({
-      where: { id: swipeId }
-    });
+    await prisma.$transaction([
+      prisma.swipe.delete({
+        where: { id: swipeId }
+      }),
+      prisma.user.update({
+        where: { id: userId },
+        data: { lastRewindAt: new Date() }
+      })
+    ]);
 
     const rewoundUser = await prisma.user.findUnique({
       where: { id: swipedId }
     });
 
     if (rewoundUser) {
-      return res.json({ success: true, user: formatUserCard(rewoundUser) });
+      return res.json({
+        success: true,
+        user: formatUserCard(rewoundUser),
+        canRewindToday: false,
+        rewindsRemainingToday: 0
+      });
     }
 
-    res.json({ success: true, user: null });
+    res.json({ success: true, user: null, canRewindToday: false, rewindsRemainingToday: 0 });
   } catch (error) {
     console.error('Rewind error:', error);
     res.status(500).json({ error: 'Erro interno ao desfazer swipe' });

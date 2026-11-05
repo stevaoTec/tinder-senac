@@ -37,10 +37,11 @@ model User {
   mbti               String?  @default("")
   instagram          String?  @default("")
   spotify            String?  @default("")
-  vibeScore          Int?     @default(100)
-  favoritePlace      String?  @default("")
-  currentEvent       String?  @default("")
-  createdAt          DateTime @default(now())
+  vibeScore          Int?      @default(100)
+  favoritePlace      String?   @default("")
+  currentEvent       String?   @default("")
+  lastRewindAt       DateTime?
+  createdAt          DateTime  @default(now())
   updatedAt          DateTime @updatedAt
 
   swipesGiven    Swipe[]   @relation("SwipesGiven")

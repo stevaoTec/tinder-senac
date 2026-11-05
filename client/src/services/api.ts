@@ -113,20 +113,20 @@ export async function swipeUser(targetUserId: number, direction: 'like' | 'disli
   return handleResponse<SwipeResult>(res);
 }
 
-export async function rewindSwipe(): Promise<{ success: boolean; user: User }> {
+export async function rewindSwipe(): Promise<{ success: boolean; user: User; canRewindToday?: boolean; rewindsRemainingToday?: number }> {
   const res = await fetch(`${API_URL}/swipes/rewind`, {
     method: 'DELETE',
     headers: getHeaders()
   });
-  return handleResponse<{ success: boolean; user: User }>(res);
+  return handleResponse(res);
 }
 
-export async function getDislikedUsers(): Promise<User[]> {
+export async function getDislikedUsers(): Promise<{ users: User[]; canRewindToday: boolean; rewindsRemainingToday: number }> {
   const res = await fetch(`${API_URL}/swipes/disliked`, { headers: getHeaders() });
-  return handleResponse<User[]>(res);
+  return handleResponse(res);
 }
 
-export async function restoreDislikedUser(targetUserId: number | 'all'): Promise<{ success: boolean; user?: User; restoredAll?: boolean }> {
+export async function restoreDislikedUser(targetUserId: number): Promise<{ success: boolean; user?: User; canRewindToday?: boolean; rewindsRemainingToday?: number }> {
   const res = await fetch(`${API_URL}/swipes/restore/${targetUserId}`, {
     method: 'POST',
     headers: getHeaders()
