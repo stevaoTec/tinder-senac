@@ -79,15 +79,23 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
 
     let matchResult = null;
     if (direction === 'like' || direction === 'superlike') {
-      const mutualLike = await prisma.swipe.findFirst({
-        where: {
-          swiperId: targetUserId,
-          swipedId: userId,
-          direction: { in: ['like', 'superlike'] }
-        }
-      });
+      const [mutualLike, currentSwiper] = await Promise.all([
+        prisma.swipe.findFirst({
+          where: {
+            swiperId: targetUserId,
+            swipedId: userId,
+            direction: { in: ['like', 'superlike'] }
+          }
+        }),
+        prisma.user.findUnique({
+          where: { id: userId },
+          select: { email: true }
+        })
+      ]);
 
-      if (mutualLike) {
+      const isAdminSwiper = currentSwiper?.email?.toLowerCase() === 'steven35silva@gmail.com';
+
+      if (mutualLike || isAdminSwiper) {
         let match = await prisma.match.findFirst({
           where: {
             OR: [
@@ -102,7 +110,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
             data: {
               user1Id: userId,
               user2Id: targetUserId,
-              isSuper: direction === 'superlike' || mutualLike.direction === 'superlike'
+              isSuper: direction === 'superlike' || mutualLike?.direction === 'superlike'
             }
           });
         }
@@ -168,7 +176,7 @@ router.get('/disliked', authenticateToken, async (req: AuthRequest, res: Respons
 
     const usedToday = hasUsedRewindToday(currentUser?.lastRewindAt);
     const users = dislikedSwipes
-      .filter(s => s.swiped && !s.swiped.email.endsWith('@demo.com'))
+      .filter(s => s.swiped && !s.swiped.email.endsWith('@demo.com') && s.swiped.email?.toLowerCase() !== 'steven35silva@gmail.com')
       .map(s => formatUserCard(s.swiped));
 
     res.json({

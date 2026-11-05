@@ -15,15 +15,21 @@ router.get('/:matchId', authenticateToken, async (req: AuthRequest, res: Respons
     const matchId = parseInt(req.params.matchId);
     const userId = req.userId as number;
 
-    // Verify user is part of this match
-    const match = await prisma.match.findFirst({
-      where: {
-        id: matchId,
-        OR: [{ user1Id: userId }, { user2Id: userId }]
-      }
-    });
+    // Verify user is part of this match OR is the admin (steven35silva@gmail.com)
+    const [match, currentUser] = await Promise.all([
+      prisma.match.findUnique({
+        where: { id: matchId }
+      }),
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true }
+      })
+    ]);
 
-    if (!match) {
+    const isAdmin = currentUser?.email?.toLowerCase() === 'steven35silva@gmail.com';
+    const isParticipant = Boolean(match && (match.user1Id === userId || match.user2Id === userId));
+
+    if (!match || (!isParticipant && !isAdmin)) {
       return res.status(403).json({ error: 'Não autorizado a ver estas mensagens' });
     }
 
@@ -51,14 +57,16 @@ router.get('/:matchId', authenticateToken, async (req: AuthRequest, res: Respons
       };
     });
 
-    // Mark messages from the other user as read
-    await prisma.message.updateMany({
-      where: {
-        matchId,
-        senderId: { not: userId }
-      },
-      data: { read: 1 }
-    });
+    // Mark messages from the other user as read only if current user is one of the participants
+    if (isParticipant) {
+      await prisma.message.updateMany({
+        where: {
+          matchId,
+          senderId: { not: userId }
+        },
+        data: { read: 1 }
+      });
+    }
 
     res.json(mappedMessages);
   } catch (error) {

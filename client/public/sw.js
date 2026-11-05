@@ -1,4 +1,4 @@
-const CACHE_NAME = 'matchvibe-cache-v4';
+const CACHE_NAME = 'matchvibe-cache-v5';
 const urlsToCache = [
   '/',
   '/index.html',

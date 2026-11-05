@@ -60,6 +60,51 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// POST /api/matches/admin/chat/:targetUserId - Admin can open/create a test chat with any user
+router.post('/admin/chat/:targetUserId', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId as number;
+    const targetUserId = parseInt(req.params.targetUserId);
+
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true }
+    });
+
+    if (currentUser?.email?.toLowerCase() !== 'steven35silva@gmail.com') {
+      return res.status(403).json({ error: 'Acesso exclusivo do administrador' });
+    }
+
+    if (userId === targetUserId) {
+      return res.status(400).json({ error: 'Selecione outro usuário para testar o chat' });
+    }
+
+    let match = await prisma.match.findFirst({
+      where: {
+        OR: [
+          { user1Id: userId, user2Id: targetUserId },
+          { user1Id: targetUserId, user2Id: userId }
+        ]
+      }
+    });
+
+    if (!match) {
+      match = await prisma.match.create({
+        data: {
+          user1Id: userId,
+          user2Id: targetUserId,
+          isSuper: false
+        }
+      });
+    }
+
+    res.json({ matchId: match.id });
+  } catch (error) {
+    console.error('Admin start chat error:', error);
+    res.status(500).json({ error: 'Erro ao iniciar chat de teste' });
+  }
+});
+
 // DELETE /api/matches/:matchId - Unmatch with a user (deletes match, messages, and likes)
 router.delete('/:matchId', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {

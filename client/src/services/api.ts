@@ -60,8 +60,46 @@ export async function discoverUsers(): Promise<User[]> {
   return handleResponse<User[]>(res);
 }
 
-export async function getAdminStats(): Promise<{ totalUsers: number; onlineUsers: number; users: (User & { email?: string; isOnline?: boolean; createdAt?: string })[] }> {
+export interface AdminMatchSummary {
+  matchId: number;
+  createdAt: string;
+  isSuper: boolean;
+  messageCount: number;
+  lastMessage: string | null;
+  lastMessageAt: string | null;
+  user1: {
+    id: number;
+    name: string;
+    email?: string;
+    age?: number;
+    profilePhoto?: string;
+    isOnline?: boolean;
+  };
+  user2: {
+    id: number;
+    name: string;
+    email?: string;
+    age?: number;
+    profilePhoto?: string;
+    isOnline?: boolean;
+  };
+}
+
+export async function getAdminStats(): Promise<{
+  totalUsers: number;
+  onlineUsers: number;
+  users: (User & { email?: string; isOnline?: boolean; createdAt?: string })[];
+  matches?: AdminMatchSummary[];
+}> {
   const res = await fetch(`${API_URL}/users/admin/stats`, { headers: getHeaders() });
+  return handleResponse(res);
+}
+
+export async function adminStartChat(targetUserId: number): Promise<{ matchId: number }> {
+  const res = await fetch(`${API_URL}/matches/admin/chat/${targetUserId}`, {
+    method: 'POST',
+    headers: getHeaders()
+  });
   return handleResponse(res);
 }
 

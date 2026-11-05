@@ -112,7 +112,7 @@ router.get('/discover', authenticateToken, async (req: AuthRequest, res: Respons
           : {})
       },
       select: {
-        id: true, name: true, bio: true, age: true, gender: true,
+        id: true, name: true, email: true, bio: true, age: true, gender: true,
         profilePhoto: true, coverPhoto: true, photos: true, interests: true,
         verified: true, latitude: true, longitude: true,
         relationshipIntent: true, zodiacSign: true, height: true, mbti: true, 
@@ -120,7 +120,12 @@ router.get('/discover', authenticateToken, async (req: AuthRequest, res: Respons
       }
     });
 
-    const mappedUsers = users.map(u => {
+    // Exclude admin profile (steven35silva@gmail.com) so it never appears to anyone
+    const visibleUsers = users.filter(
+      u => u.email?.toLowerCase() !== 'steven35silva@gmail.com'
+    );
+
+    const mappedUsers = visibleUsers.map(u => {
       const photos = JSON.parse(u.photos || '[]');
       const userInterests = JSON.parse(u.interests || '[]');
       
@@ -333,10 +338,61 @@ router.get('/admin/stats', authenticateToken, async (req: AuthRequest, res: Resp
 
     const onlineCount = mappedUsers.filter(u => u.isOnline).length;
 
+    const rawMatches = await prisma.match.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        user1: {
+          select: { id: true, name: true, email: true, profilePhoto: true, photos: true, age: true }
+        },
+        user2: {
+          select: { id: true, name: true, email: true, profilePhoto: true, photos: true, age: true }
+        },
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { id: true, content: true, senderId: true, createdAt: true }
+        },
+        _count: {
+          select: { messages: true }
+        }
+      }
+    });
+
+    const formatMatchParticipant = (p: any) => {
+      const photos: string[] = JSON.parse(p.photos || '[]');
+      const rawPhoto = p.profilePhoto || photos[0] || '';
+      return {
+        id: p.id,
+        name: p.name,
+        email: p.email,
+        age: p.age,
+        profilePhoto: rawPhoto ? rawPhoto.replace(/=s\d+(-c)?$/, '=s800-c') : '',
+        isOnline: onlineIds.has(p.id)
+      };
+    };
+
+    const mappedMatches = rawMatches.map(m => ({
+      matchId: m.id,
+      createdAt: m.createdAt,
+      isSuper: m.isSuper,
+      messageCount: m._count.messages,
+      lastMessage: m.messages[0]?.content || null,
+      lastMessageAt: m.messages[0]?.createdAt || null,
+      user1: formatMatchParticipant(m.user1),
+      user2: formatMatchParticipant(m.user2)
+    }));
+
+    mappedMatches.sort((a, b) => {
+      const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : new Date(a.createdAt).getTime();
+      const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : new Date(b.createdAt).getTime();
+      return bTime - aTime;
+    });
+
     res.json({
       totalUsers: mappedUsers.length,
       onlineUsers: onlineCount,
-      users: mappedUsers
+      users: mappedUsers,
+      matches: mappedMatches
     });
   } catch (err) {
     console.error('Admin stats error:', err);
