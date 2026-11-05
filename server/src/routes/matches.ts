@@ -14,8 +14,8 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
         OR: [{ user1Id: userId }, { user2Id: userId }]
       },
       include: {
-        user1: { select: { id: true, name: true, profilePhoto: true, bio: true, age: true } },
-        user2: { select: { id: true, name: true, profilePhoto: true, bio: true, age: true } },
+        user1: { select: { id: true, name: true, profilePhoto: true, photos: true, bio: true, age: true } },
+        user2: { select: { id: true, name: true, profilePhoto: true, photos: true, bio: true, age: true } },
         messages: {
           orderBy: { createdAt: 'desc' },
           take: 1,
@@ -28,6 +28,9 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       const isUser1 = m.user1Id === userId;
       const matchedUser = isUser1 ? m.user2 : m.user1;
       const lastMessage = m.messages.length > 0 ? m.messages[0] : null;
+      const userPhotos: string[] = JSON.parse(matchedUser.photos || '[]');
+      const rawPhoto = matchedUser.profilePhoto || userPhotos[0] || '';
+      const profilePhoto = rawPhoto ? rawPhoto.replace(/=s\d+(-c)?$/, '=s800-c') : '';
 
       return {
         matchId: m.id,
@@ -35,7 +38,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
         isSuper: m.isSuper,
         userId: matchedUser.id,
         name: matchedUser.name,
-        profilePhoto: matchedUser.profilePhoto,
+        profilePhoto,
         bio: matchedUser.bio,
         age: matchedUser.age,
         lastMessage: lastMessage?.content || null,

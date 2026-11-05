@@ -30,7 +30,7 @@ export default function SwipeCard({ user, onSwipe, isBehind }: SwipeCardProps) {
 
   const getProfileImage = () => {
     if (!currentPhoto) return '';
-    return currentPhoto;
+    return currentPhoto.replace(/=s\d+(-c)?$/, '=s800-c');
   };
 
   const handleDragEnd = async (event: any, info: PanInfo) => {

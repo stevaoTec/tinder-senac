@@ -154,6 +154,7 @@ router.post('/google', async (req: Request, res: Response) => {
 
     const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
     const { email, name, picture, sub: googleId } = payload;
+    const highResPicture = picture ? picture.replace(/=s\d+(-c)?$/, '=s800-c') : '';
 
     if (!email) {
       return res.status(400).json({ error: 'Email nao encontrado no token do Google' });
@@ -164,15 +165,23 @@ router.post('/google', async (req: Request, res: Response) => {
     });
 
     if (user) {
-      // Existing user - login
-      if (!user.googleId) {
+      // Existing user - login (and upgrade blurry Google =s96-c avatar if needed)
+      const needsPhotoUpgrade = highResPicture && (!user.profilePhoto || user.profilePhoto.includes('=s96-c'));
+      if (!user.googleId || needsPhotoUpgrade) {
+        const currentPhotos: string[] = JSON.parse(user.photos || '[]');
+        const updatedPhotos = needsPhotoUpgrade
+          ? [highResPicture, ...currentPhotos.filter(p => !p.includes('=s96-c'))]
+          : currentPhotos;
         user = await prisma.user.update({
           where: { id: user.id },
-          data: { googleId }
+          data: {
+            googleId: user.googleId || googleId,
+            ...(needsPhotoUpgrade ? { profilePhoto: highResPicture, photos: JSON.stringify(updatedPhotos) } : {})
+          }
         });
       }
       const token = generateToken(user.id);
-    markUserActive(user.id);
+      markUserActive(user.id);
       const { password: _, ...userWithoutPassword } = user;
       
       const mappedUser = {
@@ -184,7 +193,7 @@ router.post('/google', async (req: Request, res: Response) => {
       return res.json({ token, user: mappedUser });
     } else {
       // New user - register via Google
-      const avatarUrl = picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name || email)}`;
+      const avatarUrl = highResPicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name || email)}`;
       const randomPassword = bcrypt.hashSync(Math.random().toString(36), 10);
 
       const newUser = await prisma.user.create({

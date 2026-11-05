@@ -290,16 +290,35 @@ router.get('/admin/stats', authenticateToken, async (req: AuthRequest, res: Resp
   }
 });
 
-// GET /api/users/:id - Get user by ID
+// GET /api/users/:id - Get user by ID (only allowed if matched with current user)
 router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
+    const currentUserId = req.userId as number;
+    const targetUserId = parseInt(req.params.id);
+
+    if (currentUserId !== targetUserId) {
+      const match = await prisma.match.findFirst({
+        where: {
+          OR: [
+            { user1Id: currentUserId, user2Id: targetUserId },
+            { user1Id: targetUserId, user2Id: currentUserId }
+          ]
+        }
+      });
+
+      if (!match) {
+        return res.status(403).json({ error: 'Você só pode ver o perfil completo após dar Match' });
+      }
+    }
+
     const user = await prisma.user.findUnique({
-      where: { id: parseInt(req.params.id) },
+      where: { id: targetUserId },
       select: {
         id: true, name: true, bio: true, age: true, gender: true,
         profilePhoto: true, coverPhoto: true, photos: true, interests: true,
         verified: true, maxDistance: true,
-        relationshipIntent: true, zodiacSign: true, height: true, mbti: true, instagram: true, spotify: true
+        relationshipIntent: true, zodiacSign: true, height: true, mbti: true,
+        instagram: true, spotify: true, vibeScore: true, favoritePlace: true, currentEvent: true
       }
     });
 
@@ -307,9 +326,13 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
 
+    const photos: string[] = JSON.parse(user.photos || '[]');
+    const profilePhoto = user.profilePhoto || photos[0] || '';
+
     const mappedUser = {
       ...user,
-      photos: JSON.parse(user.photos || '[]'),
+      profilePhoto,
+      photos,
       interests: JSON.parse(user.interests || '[]'),
       verified: Boolean(user.verified)
     };

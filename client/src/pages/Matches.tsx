@@ -40,8 +40,7 @@ export default function Matches() {
 
   const getProfileImage = (photo: string) => {
     if (!photo) return '';
-    if (photo.startsWith('http')) return photo;
-    return photo;
+    return photo.replace(/=s\d+(-c)?$/, '=s800-c');
   };
 
   const formatTime = (dateStr: string | null) => {
@@ -111,7 +110,14 @@ export default function Matches() {
             >
               <div className="match-avatar">
                 {getProfileImage(match.profilePhoto) ? (
-                  <img src={getProfileImage(match.profilePhoto)} alt={match.name} />
+                  <img
+                    src={getProfileImage(match.profilePhoto)}
+                    alt={match.name}
+                    referrerPolicy="no-referrer"
+                    onError={e => {
+                      (e.currentTarget as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
                 ) : (
                   <span className="avatar-placeholder-sm">{match.name.charAt(0)}</span>
                 )}

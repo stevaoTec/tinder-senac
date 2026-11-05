@@ -2,6 +2,24 @@ import { prisma } from './prisma';
 
 export async function ensureSeedUsers() {
   try {
+    // Upgrade any existing blurry =s96-c Google photos in the DB to =s800-c HD
+    const googleUsers = await prisma.user.findMany({
+      where: { profilePhoto: { contains: '=s96-c' } },
+      select: { id: true, profilePhoto: true, photos: true }
+    });
+    for (const gu of googleUsers) {
+      const hdPhoto = (gu.profilePhoto || '').replace(/=s\d+(-c)?$/, '=s800-c');
+      const existingPhotos: string[] = JSON.parse(gu.photos || '[]');
+      const hdPhotos = existingPhotos.map(p => p.replace(/=s\d+(-c)?$/, '=s800-c'));
+      await prisma.user.update({
+        where: { id: gu.id },
+        data: {
+          profilePhoto: hdPhoto,
+          photos: JSON.stringify(hdPhotos)
+        }
+      });
+    }
+
     const demoUsers = await prisma.user.findMany({
       where: { email: { endsWith: '@demo.com' } },
       select: { id: true }

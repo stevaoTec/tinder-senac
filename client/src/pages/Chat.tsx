@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Message, Match } from '../types';
+import { Message, Match, User } from '../types';
 import * as api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -13,6 +13,10 @@ export default function Chat() {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [matchInfo, setMatchInfo] = useState<Match | null>(null);
+  const [matchedUserProfile, setMatchedUserProfile] = useState<User | null>(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [modalPhotoIndex, setModalPhotoIndex] = useState(0);
+  const [avatarError, setAvatarError] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -40,6 +44,16 @@ export default function Chat() {
         setMessages(msgs);
         const currentMatch = matches.find(m => m.matchId === parseInt(matchId));
         setMatchInfo(currentMatch || null);
+        setAvatarError(false);
+
+        if (currentMatch) {
+          try {
+            const fullProfile = await api.getUserById(currentMatch.userId);
+            setMatchedUserProfile(fullProfile);
+          } catch (e) {
+            console.error('Erro ao carregar perfil do match:', e);
+          }
+        }
       } catch (err) {
         console.error('Error loading chat:', err);
       } finally {
@@ -155,10 +169,21 @@ export default function Chat() {
     }
   };
 
-  const getProfileImage = (photo: string) => {
+  const getProfileImage = (photo?: string) => {
     if (!photo) return '';
-    if (photo.startsWith('http')) return photo;
-    return photo;
+    return photo.replace(/=s\d+(-c)?$/, '=s800-c');
+  };
+
+  const handleOpenProfile = async () => {
+    if (!matchInfo) return;
+    setModalPhotoIndex(0);
+    setShowProfileModal(true);
+    try {
+      const freshProfile = await api.getUserById(matchInfo.userId);
+      setMatchedUserProfile(freshProfile);
+    } catch (err) {
+      console.error('Erro ao buscar perfil completo:', err);
+    }
   };
 
   const formatTime = (dateStr: string) => {
@@ -209,6 +234,11 @@ export default function Chat() {
     );
   }
 
+  const headerPhoto = getProfileImage(matchedUserProfile?.profilePhoto || matchInfo?.profilePhoto);
+  const modalPhotos = matchedUserProfile?.photos && matchedUserProfile.photos.length > 0
+    ? matchedUserProfile.photos.map(p => getProfileImage(p))
+    : headerPhoto ? [headerPhoto] : [];
+
   return (
     <div className="chat-page">
       <div className="chat-header">
@@ -218,19 +248,30 @@ export default function Chat() {
           </svg>
         </button>
         {matchInfo && (
-          <div className="chat-user-info">
+          <div
+            className="chat-user-info clickable-user-card"
+            onClick={handleOpenProfile}
+            title="Clique para ver o perfil completo"
+          >
             <div className="chat-avatar">
-              {getProfileImage(matchInfo.profilePhoto) ? (
-                <img src={getProfileImage(matchInfo.profilePhoto)} alt={matchInfo.name} />
+              {headerPhoto && !avatarError ? (
+                <img
+                  src={headerPhoto}
+                  alt={matchInfo.name}
+                  referrerPolicy="no-referrer"
+                  onError={() => setAvatarError(true)}
+                />
               ) : (
                 <span>{matchInfo.name.charAt(0)}</span>
               )}
               {onlineUsers.has(matchInfo.userId) && <span className="online-dot" />}
             </div>
             <div className="chat-user-details">
-              <h3>{matchInfo.name}</h3>
+              <h3>{matchInfo.name}{matchedUserProfile?.age ? `, ${matchedUserProfile.age}` : ''}</h3>
               <span className="chat-status">
-                {isTyping ? 'Digitando...' : onlineUsers.has(matchInfo.userId) ? 'Online' : 'Offline'}
+                {isTyping
+                  ? 'Digitando...'
+                  : `${onlineUsers.has(matchInfo.userId) ? 'Online' : 'Offline'} • Toque para ver perfil`}
               </span>
             </div>
           </div>
@@ -266,6 +307,7 @@ export default function Chat() {
           const showDate = index === 0 ||
             getDateForMessage(msg) !== getDateForMessage(messages[index - 1]);
           const isSent = msg.senderId === user?.id;
+          const msgAvatar = getProfileImage(msg.senderPhoto || headerPhoto);
 
           return (
             <React.Fragment key={msg.id}>
@@ -274,26 +316,44 @@ export default function Chat() {
                   <span>{formatDateSeparator(msg.createdAt)}</span>
                 </div>
               )}
-              <div className={`message ${isSent ? 'sent' : 'received'}`}>
-                <div className="message-bubble">
-                  <p>{msg.content}</p>
-                  <span className="message-time">
-                    {formatTime(msg.createdAt)}
-                    {isSent && (
-                      <span className="message-read-indicator">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          {msg.read ? (
-                            <>
-                              <polyline points="18 7 11 14 6 9" opacity="0.5"/>
-                              <polyline points="20 7 13 14 8 9"/>
-                            </>
-                          ) : (
-                            <polyline points="20 6 9 17 4 12"/>
-                          )}
-                        </svg>
-                      </span>
+              <div className={`message-row ${isSent ? 'sent' : 'received'}`}>
+                {!isSent && (
+                  <div className="message-avatar" onClick={handleOpenProfile} title="Ver perfil">
+                    {msgAvatar && !avatarError ? (
+                      <img
+                        src={msgAvatar}
+                        alt={msg.senderName || matchInfo?.name}
+                        referrerPolicy="no-referrer"
+                        onError={e => {
+                          (e.currentTarget as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <span>{(msg.senderName || matchInfo?.name || '?').charAt(0)}</span>
                     )}
-                  </span>
+                  </div>
+                )}
+                <div className={`message ${isSent ? 'sent' : 'received'}`}>
+                  <div className="message-bubble">
+                    <p>{msg.content}</p>
+                    <span className="message-time">
+                      {formatTime(msg.createdAt)}
+                      {isSent && (
+                        <span className="message-read-indicator">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            {msg.read ? (
+                              <>
+                                <polyline points="18 7 11 14 6 9" opacity="0.5"/>
+                                <polyline points="20 7 13 14 8 9"/>
+                              </>
+                            ) : (
+                              <polyline points="20 6 9 17 4 12"/>
+                            )}
+                          </svg>
+                        </span>
+                      )}
+                    </span>
+                  </div>
                 </div>
               </div>
             </React.Fragment>
@@ -301,12 +361,14 @@ export default function Chat() {
         })}
 
         {isTyping && (
-          <div className="message received">
-            <div className="message-bubble typing-bubble">
-              <div className="typing-indicator">
-                <span className="typing-dot" />
-                <span className="typing-dot" />
-                <span className="typing-dot" />
+          <div className="message-row received">
+            <div className="message received">
+              <div className="message-bubble typing-bubble">
+                <div className="typing-indicator">
+                  <span className="typing-dot" />
+                  <span className="typing-dot" />
+                  <span className="typing-dot" />
+                </div>
               </div>
             </div>
           </div>
@@ -339,6 +401,142 @@ export default function Chat() {
           </svg>
         </button>
       </div>
+
+      {/* Matched User Profile Modal (Only accessible from Chat after Match) */}
+      {showProfileModal && (
+        <div className="chat-profile-modal-overlay" onClick={() => setShowProfileModal(false)}>
+          <div className="chat-profile-modal" onClick={e => e.stopPropagation()}>
+            <button className="chat-profile-close" onClick={() => setShowProfileModal(false)} aria-label="Fechar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6L6 18M6 6l12 12"/>
+              </svg>
+            </button>
+
+            <div className="chat-profile-hero">
+              {modalPhotos.length > 0 ? (
+                <img
+                  src={modalPhotos[modalPhotoIndex] || headerPhoto}
+                  alt={matchedUserProfile?.name || matchInfo?.name}
+                  className="chat-profile-main-photo"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="chat-profile-photo-placeholder">
+                  {(matchedUserProfile?.name || matchInfo?.name || '?').charAt(0)}
+                </div>
+              )}
+
+              {modalPhotos.length > 1 && (
+                <>
+                  <div className="chat-profile-indicators">
+                    {modalPhotos.map((_, idx) => (
+                      <span
+                        key={idx}
+                        className={`chat-profile-dot ${idx === modalPhotoIndex ? 'active' : ''}`}
+                        onClick={() => setModalPhotoIndex(idx)}
+                      />
+                    ))}
+                  </div>
+                  {modalPhotoIndex > 0 && (
+                    <button
+                      className="chat-photo-nav prev"
+                      onClick={() => setModalPhotoIndex(i => i - 1)}
+                    >
+                      ‹
+                    </button>
+                  )}
+                  {modalPhotoIndex < modalPhotos.length - 1 && (
+                    <button
+                      className="chat-photo-nav next"
+                      onClick={() => setModalPhotoIndex(i => i + 1)}
+                    >
+                      ›
+                    </button>
+                  )}
+                </>
+              )}
+
+              <div className="chat-profile-hero-overlay">
+                <h2>
+                  {matchedUserProfile?.name || matchInfo?.name}
+                  {(matchedUserProfile?.age || matchInfo?.age) ? `, ${matchedUserProfile?.age || matchInfo?.age}` : ''}
+                  {matchedUserProfile?.verified && <span className="chat-verified-badge" title="Verificado">✓</span>}
+                </h2>
+                <div className="chat-profile-status-pill">
+                  <span className={`status-dot ${matchInfo && onlineUsers.has(matchInfo.userId) ? 'online' : 'offline'}`} />
+                  {matchInfo && onlineUsers.has(matchInfo.userId) ? 'Online agora' : 'Offline'}
+                  {matchedUserProfile?.vibeScore !== undefined && ` • 🔥 Vibe ${matchedUserProfile.vibeScore}`}
+                </div>
+              </div>
+            </div>
+
+            <div className="chat-profile-body">
+              {(matchedUserProfile?.bio || matchInfo?.bio) && (
+                <div className="chat-profile-section">
+                  <h4>Sobre</h4>
+                  <p>{matchedUserProfile?.bio || matchInfo?.bio}</p>
+                </div>
+              )}
+
+              {(matchedUserProfile?.relationshipIntent ||
+                matchedUserProfile?.height ||
+                matchedUserProfile?.zodiacSign ||
+                matchedUserProfile?.mbti ||
+                matchedUserProfile?.currentEvent ||
+                matchedUserProfile?.favoritePlace) && (
+                <div className="chat-profile-section">
+                  <h4>Detalhes</h4>
+                  <div className="chat-profile-badges">
+                    {matchedUserProfile?.relationshipIntent && (
+                      <span className="chat-info-badge">🎯 {matchedUserProfile.relationshipIntent}</span>
+                    )}
+                    {matchedUserProfile?.height && (
+                      <span className="chat-info-badge">📏 {matchedUserProfile.height} cm</span>
+                    )}
+                    {matchedUserProfile?.zodiacSign && (
+                      <span className="chat-info-badge">✨ {matchedUserProfile.zodiacSign}</span>
+                    )}
+                    {matchedUserProfile?.mbti && (
+                      <span className="chat-info-badge">🧠 {matchedUserProfile.mbti}</span>
+                    )}
+                    {matchedUserProfile?.currentEvent && (
+                      <span className="chat-info-badge">📍 {matchedUserProfile.currentEvent}</span>
+                    )}
+                    {matchedUserProfile?.favoritePlace && (
+                      <span className="chat-info-badge">🏙️ {matchedUserProfile.favoritePlace}</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {matchedUserProfile?.interests && matchedUserProfile.interests.length > 0 && (
+                <div className="chat-profile-section">
+                  <h4>Interesses</h4>
+                  <div className="chat-profile-badges">
+                    {matchedUserProfile.interests.map(interest => (
+                      <span key={interest} className="chat-interest-tag">{interest}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(matchedUserProfile?.instagram || matchedUserProfile?.spotify) && (
+                <div className="chat-profile-section">
+                  <h4>Redes & Música</h4>
+                  <div className="chat-profile-badges">
+                    {matchedUserProfile?.instagram && (
+                      <span className="chat-info-badge">📸 @{matchedUserProfile.instagram.replace('@', '')}</span>
+                    )}
+                    {matchedUserProfile?.spotify && (
+                      <span className="chat-info-badge">🎵 {matchedUserProfile.spotify}</span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

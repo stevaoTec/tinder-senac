@@ -23,8 +23,7 @@ export default function MatchModal({ user, onClose }: MatchModalProps) {
 
   const getImage = (photo: string) => {
     if (!photo) return '';
-    if (photo.startsWith('http')) return photo;
-    return photo;
+    return photo.replace(/=s\d+(-c)?$/, '=s800-c');
   };
 
   return (
@@ -82,7 +81,7 @@ export default function MatchModal({ user, onClose }: MatchModalProps) {
               transition={{ delay: 0.3, type: 'spring' }}
             >
               {getImage(currentUser?.profilePhoto || '') ? (
-                <img src={getImage(currentUser?.profilePhoto || '')} alt="Voce" />
+                <img src={getImage(currentUser?.profilePhoto || '')} alt="Voce" referrerPolicy="no-referrer" />
               ) : (
                 <span>{currentUser?.name?.charAt(0)}</span>
               )}
@@ -99,7 +98,7 @@ export default function MatchModal({ user, onClose }: MatchModalProps) {
               transition={{ delay: 0.3, type: 'spring' }}
             >
               {getImage(user.profilePhoto || '') ? (
-                <img src={getImage(user.profilePhoto || '')} alt={user.name} />
+                <img src={getImage(user.profilePhoto || '')} alt={user.name} referrerPolicy="no-referrer" />
               ) : (
                 <span>{user.name.charAt(0)}</span>
               )}

@@ -13,8 +13,7 @@ export default function Navbar() {
 
   const getProfileImage = () => {
     if (!user?.profilePhoto) return '';
-    if (user.profilePhoto.startsWith('http')) return user.profilePhoto;
-    return user.profilePhoto;
+    return user.profilePhoto.replace(/=s\d+(-c)?$/, '=s800-c');
   };
 
   const handleLogout = () => {
@@ -98,7 +97,7 @@ export default function Navbar() {
           </button>
           <div className="nav-avatar" onClick={() => navigate('/profile')}>
             {getProfileImage() ? (
-              <img src={getProfileImage()} alt={user?.name} />
+              <img src={getProfileImage()} alt={user?.name} referrerPolicy="no-referrer" />
             ) : (
               <span>{user?.name?.charAt(0)}</span>
             )}

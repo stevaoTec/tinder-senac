@@ -31,21 +31,25 @@ router.get('/:matchId', authenticateToken, async (req: AuthRequest, res: Respons
       where: { matchId },
       include: {
         sender: {
-          select: { name: true, profilePhoto: true }
+          select: { name: true, profilePhoto: true, photos: true }
         }
       },
       orderBy: { createdAt: 'asc' }
     });
 
-    const mappedMessages = messages.map(m => ({
-      id: m.id,
-      content: m.content,
-      senderId: m.senderId,
-      createdAt: m.createdAt,
-      read: m.read,
-      senderName: m.sender.name,
-      senderPhoto: m.sender.profilePhoto
-    }));
+    const mappedMessages = messages.map(m => {
+      const senderPhotos: string[] = JSON.parse(m.sender.photos || '[]');
+      const rawPhoto = m.sender.profilePhoto || senderPhotos[0] || '';
+      return {
+        id: m.id,
+        content: m.content,
+        senderId: m.senderId,
+        createdAt: m.createdAt,
+        read: m.read,
+        senderName: m.sender.name,
+        senderPhoto: rawPhoto ? rawPhoto.replace(/=s\d+(-c)?$/, '=s800-c') : ''
+      };
+    });
 
     // Mark messages from the other user as read
     await prisma.message.updateMany({
@@ -90,7 +94,7 @@ router.post('/:matchId', authenticateToken, async (req: AuthRequest, res: Respon
       },
       include: {
         sender: {
-          select: { name: true, profilePhoto: true }
+          select: { name: true, profilePhoto: true, photos: true }
         }
       }
     });
@@ -100,6 +104,9 @@ router.post('/:matchId', authenticateToken, async (req: AuthRequest, res: Respon
       data: { vibeScore: { increment: 2 } }
     });
 
+    const senderPhotos: string[] = JSON.parse(newMessage.sender.photos || '[]');
+    const rawPhoto = newMessage.sender.profilePhoto || senderPhotos[0] || '';
+
     const mappedMessage = {
       id: newMessage.id,
       content: newMessage.content,
@@ -107,7 +114,7 @@ router.post('/:matchId', authenticateToken, async (req: AuthRequest, res: Respon
       createdAt: newMessage.createdAt,
       read: newMessage.read,
       senderName: newMessage.sender.name,
-      senderPhoto: newMessage.sender.profilePhoto
+      senderPhoto: rawPhoto ? rawPhoto.replace(/=s\d+(-c)?$/, '=s800-c') : ''
     };
 
     const otherUserId = match.user1Id === userId ? match.user2Id : match.user1Id;

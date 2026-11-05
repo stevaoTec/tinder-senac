@@ -107,7 +107,7 @@ export default function Profile() {
               resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
             },
             'image/jpeg',
-            0.82
+            0.92
           );
         };
         img.onerror = () => resolve(file);
@@ -120,7 +120,7 @@ export default function Profile() {
 
   const handlePhotoUpload = async (file: File, type: 'profile' | 'cover') => {
     try {
-      const compressed = await compressImageFile(file, type === 'profile' ? 800 : 1000);
+      const compressed = await compressImageFile(file, type === 'profile' ? 1440 : 1600);
       if (type === 'profile') {
         const { profilePhoto, photos } = await api.uploadProfilePhoto(compressed);
         updateUser({ ...user!, profilePhoto, ...(photos ? { photos } : {}) });
@@ -157,14 +157,12 @@ export default function Profile() {
 
   const getProfileImage = () => {
     if (!user?.profilePhoto) return '';
-    if (user.profilePhoto.startsWith('http')) return user.profilePhoto;
-    return user.profilePhoto;
+    return user.profilePhoto.replace(/=s\d+(-c)?$/, '=s800-c');
   };
 
   const getCoverImage = () => {
     if (!user?.coverPhoto) return '';
-    if (user.coverPhoto.startsWith('http')) return user.coverPhoto;
-    return user.coverPhoto;
+    return user.coverPhoto.replace(/=s\d+(-c)?$/, '=s1200-c');
   };
 
   const getCompletionPercentage = () => {
@@ -215,7 +213,7 @@ export default function Profile() {
             onClick={() => profileInputRef.current?.click()}
           >
             {getProfileImage() ? (
-              <img src={getProfileImage()} alt={user?.name} />
+              <img src={getProfileImage()} alt={user?.name} referrerPolicy="no-referrer" />
             ) : (
               <span className="avatar-placeholder">{user?.name?.charAt(0)}</span>
             )}
