@@ -60,7 +60,7 @@ export async function discoverUsers(): Promise<User[]> {
   return handleResponse<User[]>(res);
 }
 
-export async function getAdminStats(): Promise<{ totalUsers: number; onlineUsers: number }> {
+export async function getAdminStats(): Promise<{ totalUsers: number; onlineUsers: number; users: (User & { email?: string; isOnline?: boolean; createdAt?: string })[] }> {
   const res = await fetch(`${API_URL}/users/admin/stats`, { headers: getHeaders() });
   return handleResponse(res);
 }

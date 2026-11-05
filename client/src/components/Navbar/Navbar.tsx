@@ -61,7 +61,7 @@ export default function Navbar() {
             </span>
             <span>Perfil</span>
           </NavLink>
-          {user?.email === 'steven35silva@gmail.com' && (
+          {user?.email?.toLowerCase() === 'steven35silva@gmail.com' && (
             <NavLink to="/admin" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
               <span className="nav-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -174,7 +174,7 @@ export default function Navbar() {
           </span>
           <span className="mobile-nav-label">Perfil</span>
         </NavLink>
-        {user?.email === 'steven35silva@gmail.com' && (
+        {user?.email?.toLowerCase() === 'steven35silva@gmail.com' && (
           <NavLink to="/admin" className={({ isActive }) => `mobile-nav-item ${isActive ? 'active' : ''}`}>
             <span className="mobile-nav-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

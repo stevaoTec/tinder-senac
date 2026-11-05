@@ -269,20 +269,74 @@ router.post('/profile/cover', authenticateToken, upload.single('coverPhoto'), as
   }
 });
 
-// GET /api/users/admin/stats
+// GET /api/users/admin/stats - Exclusive for admin steven35silva@gmail.com
 router.get('/admin/stats', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId as number;
+    markUserActive(userId);
     const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (user?.email !== 'steven35silva@gmail.com') {
+    if (user?.email?.toLowerCase() !== 'steven35silva@gmail.com') {
       return res.status(403).json({ error: 'Acesso negado' });
     }
-    
-    const totalUsers = await prisma.user.count();
-    
-    res.json({ 
-      totalUsers, 
-      onlineUsers: getOnlineUsersCount() 
+
+    const onlineIds = new Set(getOnlineUserIds());
+
+    const allUsers = await prisma.user.findMany({
+      where: {
+        NOT: { email: { endsWith: '@demo.com' } }
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        bio: true,
+        age: true,
+        gender: true,
+        profilePhoto: true,
+        coverPhoto: true,
+        photos: true,
+        interests: true,
+        verified: true,
+        relationshipIntent: true,
+        zodiacSign: true,
+        height: true,
+        mbti: true,
+        instagram: true,
+        spotify: true,
+        vibeScore: true,
+        favoritePlace: true,
+        currentEvent: true,
+        createdAt: true
+      }
+    });
+
+    const mappedUsers = allUsers.map(u => {
+      const photos: string[] = JSON.parse(u.photos || '[]');
+      const rawPhoto = u.profilePhoto || photos[0] || '';
+      const profilePhoto = rawPhoto ? rawPhoto.replace(/=s\d+(-c)?$/, '=s800-c') : '';
+      return {
+        ...u,
+        profilePhoto,
+        photos: photos.map(p => p.replace(/=s\d+(-c)?$/, '=s800-c')),
+        interests: JSON.parse(u.interests || '[]'),
+        verified: Boolean(u.verified),
+        isOnline: onlineIds.has(u.id)
+      };
+    });
+
+    // Sort with online users first, then newest registered
+    mappedUsers.sort((a, b) => {
+      if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
+    const onlineCount = mappedUsers.filter(u => u.isOnline).length;
+
+    res.json({
+      totalUsers: mappedUsers.length,
+      onlineUsers: onlineCount,
+      users: mappedUsers
     });
   } catch (err) {
     console.error('Admin stats error:', err);
@@ -290,24 +344,32 @@ router.get('/admin/stats', authenticateToken, async (req: AuthRequest, res: Resp
   }
 });
 
-// GET /api/users/:id - Get user by ID (only allowed if matched with current user)
+// GET /api/users/:id - Get user by ID (allowed if matched with current user OR if admin)
 router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const currentUserId = req.userId as number;
     const targetUserId = parseInt(req.params.id);
 
     if (currentUserId !== targetUserId) {
-      const match = await prisma.match.findFirst({
-        where: {
-          OR: [
-            { user1Id: currentUserId, user2Id: targetUserId },
-            { user1Id: targetUserId, user2Id: currentUserId }
-          ]
-        }
+      const currentUser = await prisma.user.findUnique({
+        where: { id: currentUserId },
+        select: { email: true }
       });
+      const isAdmin = currentUser?.email?.toLowerCase() === 'steven35silva@gmail.com';
 
-      if (!match) {
-        return res.status(403).json({ error: 'Você só pode ver o perfil completo após dar Match' });
+      if (!isAdmin) {
+        const match = await prisma.match.findFirst({
+          where: {
+            OR: [
+              { user1Id: currentUserId, user2Id: targetUserId },
+              { user1Id: targetUserId, user2Id: currentUserId }
+            ]
+          }
+        });
+
+        if (!match) {
+          return res.status(403).json({ error: 'Você só pode ver o perfil completo após dar Match' });
+        }
       }
     }
 
