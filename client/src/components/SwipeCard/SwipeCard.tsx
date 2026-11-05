@@ -1,6 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { User } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { useSocket } from '../../context/SocketContext';
 import { motion, useMotionValue, useTransform, useAnimation, PanInfo } from 'framer-motion';
 import './SwipeCard.css';
 
@@ -13,7 +14,9 @@ interface SwipeCardProps {
 export default function SwipeCard({ user, onSwipe, isBehind }: SwipeCardProps) {
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const { user: currentUser } = useAuth();
+  const { onlineUsers } = useSocket();
   const controls = useAnimation();
+  const isOnline = onlineUsers.has(user.id) || (user as any).isOnline;
 
   const x = useMotionValue(0);
   const y = useMotionValue(0);
@@ -148,6 +151,11 @@ export default function SwipeCard({ user, onSwipe, isBehind }: SwipeCardProps) {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
               </svg>
+            </span>
+          )}
+          {isOnline && (
+            <span className="card-online-pill">
+              <span className="card-online-dot" /> Online
             </span>
           )}
         </div>

@@ -127,6 +127,16 @@ export function setupSocket(io: Server): void {
       }
     });
 
+    // Unmatch notification
+    socket.on('unmatch_user', (data: { matchId: number; otherUserId: number }) => {
+      const otherSockets = userSockets.get(data.otherUserId);
+      if (otherSockets) {
+        otherSockets.forEach(sid => {
+          io.to(sid).emit('match_removed', { matchId: data.matchId });
+        });
+      }
+    });
+
     // Disconnect
     socket.on('disconnect', () => {
       const sockets = userSockets.get(userId);

@@ -140,6 +140,14 @@ export async function getMatches(): Promise<Match[]> {
   return handleResponse<Match[]>(res);
 }
 
+export async function unmatchUser(matchId: number): Promise<{ success: boolean; otherUserId: number }> {
+  const res = await fetch(`${API_URL}/matches/${matchId}`, {
+    method: 'DELETE',
+    headers: getHeaders()
+  });
+  return handleResponse(res);
+}
+
 // ── Messages ──────────────────────────────────────────
 export async function getMessages(matchId: number): Promise<Message[]> {
   const res = await fetch(`${API_URL}/messages/${matchId}`, { headers: getHeaders() });

@@ -348,54 +348,69 @@ export default function Home() {
 
       {currentIndex < users.length && (
         <div className="swipe-actions">
-          <button
-            className={`action-btn rewind-btn ${canUseRewindNow ? 'can-rewind' : ''}`}
-            onClick={handleRewind}
-            title={
-              !canRewindToday
-                ? 'Você já usou sua 1 chance de voltar hoje (disponível amanhã)'
-                : dislikedUsers[0]
-                  ? `Voltar para ${dislikedUsers[0].name} (1/1 hoje)`
-                  : 'Voltar para pessoa que não curtiu (1x por dia)'
-            }
-            disabled={rewinding}
-            id="rewind-button"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 11l5-5m-5 5l5 5m-5-5h12a5 5 0 015 5v3" />
-            </svg>
-            <span className="rewind-count-badge">{canRewindToday ? '1' : '0'}</span>
-          </button>
-          <button
-            className="action-btn dislike-btn"
-            onClick={() => handleSwipe('dislike')}
-            title="Nao curtir"
-            id="dislike-button"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
-          <button
-            className="action-btn superlike-btn"
-            onClick={() => handleSwipe('superlike')}
-            title="Super Vibe"
-            id="superlike-button"
-          >
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-            </svg>
-          </button>
-          <button
-            className="action-btn like-btn"
-            onClick={() => handleSwipe('like')}
-            title="Curtir"
-            id="like-button"
-          >
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-            </svg>
-          </button>
+          <div className="action-btn-group">
+            <button
+              className={`action-btn rewind-btn ${canUseRewindNow ? 'can-rewind' : ''}`}
+              onClick={handleRewind}
+              title={
+                !canRewindToday
+                  ? 'Você já usou sua 1 chance de voltar hoje (disponível amanhã)'
+                  : dislikedUsers[0]
+                    ? `Voltar para ${dislikedUsers[0].name} (1/1 hoje)`
+                    : 'Voltar para pessoa que não curtiu (1x por dia)'
+              }
+              disabled={rewinding}
+              id="rewind-button"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 11l5-5m-5 5l5 5m-5-5h12a5 5 0 015 5v3" />
+              </svg>
+              <span className="rewind-count-badge">{canRewindToday ? '1' : '0'}</span>
+            </button>
+            <span className="action-btn-label">Voltar</span>
+          </div>
+
+          <div className="action-btn-group">
+            <button
+              className="action-btn dislike-btn"
+              onClick={() => handleSwipe('dislike')}
+              title="Deslike / Passar"
+              id="dislike-button"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+            <span className="action-btn-label dislike-label">Deslike</span>
+          </div>
+
+          <div className="action-btn-group">
+            <button
+              className="action-btn superlike-btn"
+              onClick={() => handleSwipe('superlike')}
+              title="Super Vibe"
+              id="superlike-button"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+              </svg>
+            </button>
+            <span className="action-btn-label super-label">Super</span>
+          </div>
+
+          <div className="action-btn-group">
+            <button
+              className="action-btn like-btn"
+              onClick={() => handleSwipe('like')}
+              title="Curtir"
+              id="like-button"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+              </svg>
+            </button>
+            <span className="action-btn-label like-label">Curtir</span>
+          </div>
         </div>
       )}
 

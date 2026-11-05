@@ -4,6 +4,7 @@ import { Message, Match, User } from '../types';
 import * as api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
+import toast from 'react-hot-toast';
 import '../styles/chat.css';
 import '../styles/skeleton.css';
 
@@ -15,6 +16,8 @@ export default function Chat() {
   const [matchInfo, setMatchInfo] = useState<Match | null>(null);
   const [matchedUserProfile, setMatchedUserProfile] = useState<User | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showUnmatchConfirm, setShowUnmatchConfirm] = useState(false);
+  const [unmatching, setUnmatching] = useState(false);
   const [modalPhotoIndex, setModalPhotoIndex] = useState(0);
   const [avatarError, setAvatarError] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
@@ -111,12 +114,21 @@ export default function Chat() {
     socket.on('user_stop_typing', handleStopTyping);
     socket.on('messages_read', handleMessagesRead);
 
+    const handleMatchRemoved = (data: { matchId: number }) => {
+      if (data.matchId === numericMatchId) {
+        toast('Este match foi desfeito.', { icon: '💔' });
+        navigate('/matches');
+      }
+    };
+    socket.on('match_removed', handleMatchRemoved);
+
     return () => {
       socket.emit('leave_match', numericMatchId);
       socket.off('new_message', handleNewMessage);
       socket.off('user_typing', handleTyping);
       socket.off('user_stop_typing', handleStopTyping);
       socket.off('messages_read', handleMessagesRead);
+      socket.off('match_removed', handleMatchRemoved);
     };
   }, [socket, matchId, matchInfo, user?.id]);
 
@@ -183,6 +195,26 @@ export default function Chat() {
       setMatchedUserProfile(freshProfile);
     } catch (err) {
       console.error('Erro ao buscar perfil completo:', err);
+    }
+  };
+
+  const handleConfirmUnmatch = async () => {
+    if (!matchId || !matchInfo || unmatching) return;
+    setUnmatching(true);
+    try {
+      const numericMatchId = parseInt(matchId);
+      const res = await api.unmatchUser(numericMatchId);
+      if (socket) {
+        socket.emit('unmatch_user', {
+          matchId: numericMatchId,
+          otherUserId: res.otherUserId
+        });
+      }
+      toast.success(`Match com ${matchInfo.name} desfeito`, { icon: '💔' });
+      navigate('/matches');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao desfazer match');
+      setUnmatching(false);
     }
   };
 
@@ -275,6 +307,15 @@ export default function Chat() {
               </span>
             </div>
           </div>
+        )}
+        {matchInfo && (
+          <button
+            className="chat-unmatch-header-btn"
+            onClick={() => setShowUnmatchConfirm(true)}
+            title="Desfazer Match"
+          >
+            💔 Desfazer Match
+          </button>
         )}
       </div>
 
@@ -533,6 +574,44 @@ export default function Chat() {
                   </div>
                 </div>
               )}
+
+              <button
+                className="chat-modal-unmatch-btn"
+                onClick={() => {
+                  setShowProfileModal(false);
+                  setShowUnmatchConfirm(true);
+                }}
+              >
+                💔 Desfazer Match com {matchedUserProfile?.name || matchInfo?.name}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showUnmatchConfirm && matchInfo && (
+        <div className="chat-profile-modal-overlay" onClick={() => setShowUnmatchConfirm(false)}>
+          <div className="chat-unmatch-confirm-modal" onClick={e => e.stopPropagation()}>
+            <div className="chat-unmatch-icon">💔</div>
+            <h3>Desfazer Match com {matchInfo.name}?</h3>
+            <p>
+              Tem certeza? A conversa e o match serão removidos para vocês dois.
+            </p>
+            <div className="chat-unmatch-actions">
+              <button
+                className="chat-unmatch-cancel"
+                onClick={() => setShowUnmatchConfirm(false)}
+                disabled={unmatching}
+              >
+                Cancelar
+              </button>
+              <button
+                className="chat-unmatch-confirm"
+                onClick={handleConfirmUnmatch}
+                disabled={unmatching}
+              >
+                {unmatching ? 'Desfazendo...' : '💔 Sim, desfazer'}
+              </button>
             </div>
           </div>
         </div>

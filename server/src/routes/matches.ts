@@ -60,4 +60,54 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// DELETE /api/matches/:matchId - Unmatch with a user (deletes match, messages, and likes)
+router.delete('/:matchId', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId as number;
+    const matchId = parseInt(req.params.matchId);
+
+    const match = await prisma.match.findFirst({
+      where: {
+        id: matchId,
+        OR: [{ user1Id: userId }, { user2Id: userId }]
+      }
+    });
+
+    if (!match) {
+      return res.status(404).json({ error: 'Match não encontrado' });
+    }
+
+    const otherUserId = match.user1Id === userId ? match.user2Id : match.user1Id;
+
+    await prisma.$transaction([
+      prisma.message.deleteMany({
+        where: { matchId }
+      }),
+      prisma.match.delete({
+        where: { id: matchId }
+      }),
+      prisma.swipe.deleteMany({
+        where: {
+          OR: [
+            { swiperId: userId, swipedId: otherUserId },
+            { swiperId: otherUserId, swipedId: userId }
+          ]
+        }
+      }),
+      prisma.swipe.create({
+        data: {
+          swiperId: userId,
+          swipedId: otherUserId,
+          direction: 'dislike'
+        }
+      })
+    ]);
+
+    res.json({ success: true, otherUserId });
+  } catch (error) {
+    console.error('Unmatch error:', error);
+    res.status(500).json({ error: 'Erro ao desfazer match' });
+  }
+});
+
 export default router;
