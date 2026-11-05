@@ -11,20 +11,38 @@ import '../styles/skeleton.css';
 
 export default function Home() {
   const [users, setUsers] = useState<User[]>([]);
+  const [dislikedUsers, setDislikedUsers] = useState<User[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [rewinding, setRewinding] = useState(false);
   const [matchUser, setMatchUser] = useState<User | null>(null);
   const [showMatch, setShowMatch] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [hasSwiped, setHasSwiped] = useState(false);
+  const [showDislikedModal, setShowDislikedModal] = useState(false);
   const [showPremiumAlert, setShowPremiumAlert] = useState(false);
   const [showBlindDate, setShowBlindDate] = useState(false);
   const { socket } = useSocket();
 
+  const refreshDisliked = useCallback(async () => {
+    try {
+      const list = await api.getDislikedUsers();
+      setDislikedUsers(list);
+      if (list.length > 0) setHasSwiped(true);
+    } catch (err) {
+      console.error('Erro ao buscar perfis recusados:', err);
+    }
+  }, []);
+
   const loadUsers = useCallback(async () => {
     try {
-      const data = await api.discoverUsers();
+      const [data, disliked] = await Promise.all([
+        api.discoverUsers(),
+        api.getDislikedUsers().catch(() => [])
+      ]);
       setUsers(data);
+      setDislikedUsers(disliked);
+      if (disliked.length > 0) setHasSwiped(true);
       setCurrentIndex(0);
     } catch (err) {
       console.error('Error loading users:', err);
@@ -34,27 +52,24 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    // Try to get user location for accurate distances
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           try {
-            // Update user location in backend
             await api.updateProfile({
               latitude: position.coords.latitude,
               longitude: position.coords.longitude
             } as any);
-            // After updating location, load users so distances are accurate
             loadUsers();
           } catch (err) {
             console.error('Error updating location:', err);
-            loadUsers(); // Load anyway
+            loadUsers();
           }
         },
         (error) => {
           console.warn('Geolocation error:', error);
           setLocationError('Ative a localizacao para encontrar pessoas mais proximas.');
-          loadUsers(); // Load anyway
+          loadUsers();
         },
         { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 }
       );
@@ -67,7 +82,6 @@ export default function Home() {
     if (!socket) return;
 
     const handleUserOnline = () => {
-      // Only reload if the user currently has no cards on screen
       setUsers(prev => {
         if (prev.length === 0 || currentIndex >= prev.length) {
           loadUsers();
@@ -81,7 +95,6 @@ export default function Home() {
       setMatchUser(match.user);
       setShowMatch(true);
       
-      // Haptic and Confetti!
       if ('vibrate' in navigator) navigator.vibrate([100, 50, 100]);
       confetti({
         particleCount: 150,
@@ -100,35 +113,42 @@ export default function Home() {
     };
   }, [socket, loadUsers, currentIndex]);
 
+  const triggerMatchCelebration = (targetUser: User, match: any) => {
+    setMatchUser(match.user);
+    setShowMatch(true);
+
+    if ('vibrate' in navigator) navigator.vibrate([100, 50, 100]);
+    confetti({
+      particleCount: 150,
+      spread: 80,
+      origin: { y: 0.6 },
+      colors: ['#3b82f6', '#10b981', '#ec4899', '#f59e0b']
+    });
+
+    if (socket) {
+      socket.emit('new_match', {
+        targetUserId: targetUser.id,
+        match
+      });
+    }
+  };
+
   const handleSwipe = async (direction: 'like' | 'dislike' | 'superlike') => {
     if (currentIndex >= users.length) return;
 
     const targetUser = users[currentIndex];
     setCurrentIndex(prev => prev + 1);
+    setHasSwiped(true);
+
+    if (direction === 'dislike') {
+      setDislikedUsers(prev => [targetUser, ...prev.filter(u => u.id !== targetUser.id)]);
+    }
 
     try {
       const result: SwipeResult = await api.swipeUser(targetUser.id, direction);
-      setHasSwiped(true);
 
       if (result.match) {
-        setMatchUser(result.match.user);
-        setShowMatch(true);
-
-        // Haptic and Confetti!
-        if ('vibrate' in navigator) navigator.vibrate([100, 50, 100]);
-        confetti({
-          particleCount: 150,
-          spread: 80,
-          origin: { y: 0.6 },
-          colors: ['#3b82f6', '#10b981', '#ec4899', '#f59e0b']
-        });
-
-        if (socket) {
-          socket.emit('new_match', {
-            targetUserId: targetUser.id,
-            match: result.match
-          });
-        }
+        triggerMatchCelebration(targetUser, result.match);
       } else if (direction === 'like' || direction === 'superlike') {
         if (socket) {
           socket.emit('send_like', { targetUserId: targetUser.id });
@@ -139,21 +159,80 @@ export default function Home() {
     }
   };
 
+  const placeUserAtCurrentCard = (restoredUser: User) => {
+    setUsers(prev => {
+      const remaining = prev.slice(currentIndex).filter(u => u.id !== restoredUser.id);
+      return [restoredUser, ...remaining];
+    });
+    setCurrentIndex(0);
+    setDislikedUsers(prev => prev.filter(u => u.id !== restoredUser.id));
+  };
+
   const handleRewind = async () => {
+    if (rewinding) return;
+    setRewinding(true);
     try {
       const response = await api.rewindSwipe();
       if (response.success && response.user) {
-        setUsers(prev => {
-          const newUsers = [...prev];
-          newUsers.splice(currentIndex, 0, response.user);
-          return newUsers;
+        placeUserAtCurrentCard(response.user);
+        toast.success(`Voltou para ${response.user.name}! Agora voce pode curtir 💖`, {
+          icon: '⏪',
+          duration: 3500
         });
-        setHasSwiped(false);
-        toast('Swipe desfeito!', { icon: '⏪' });
+        refreshDisliked();
       }
     } catch (err: any) {
-      toast.error(err.message || 'Erro ao desfazer');
+      toast.error(err.message || 'Nenhum perfil anterior para voltar');
+    } finally {
+      setRewinding(false);
     }
+  };
+
+  const handleRestoreSpecificUser = async (target: User) => {
+    try {
+      const res = await api.restoreDislikedUser(target.id);
+      const restored = res.user || target;
+      placeUserAtCurrentCard(restored);
+      setShowDislikedModal(false);
+      toast.success(`${restored.name} voltou para a sua tela!`, { icon: '⏪' });
+    } catch (err: any) {
+      toast.error('Erro ao voltar perfil');
+    }
+  };
+
+  const handleLikeDirectlyFromDisliked = async (target: User) => {
+    try {
+      const result = await api.swipeUser(target.id, 'like');
+      setDislikedUsers(prev => prev.filter(u => u.id !== target.id));
+      setShowDislikedModal(false);
+
+      if (result.match) {
+        triggerMatchCelebration(target, result.match);
+      } else {
+        if (socket) {
+          socket.emit('send_like', { targetUserId: target.id });
+        }
+        toast.success(`Voce curtiu ${target.name}! 💖`);
+      }
+    } catch (err: any) {
+      toast.error('Erro ao curtir perfil');
+    }
+  };
+
+  const handleRestoreAllDisliked = async () => {
+    try {
+      await api.restoreDislikedUser('all');
+      setShowDislikedModal(false);
+      await loadUsers();
+      toast.success('Todos os perfis que voce passou voltaram para a fila!', { icon: '🔄' });
+    } catch (err) {
+      toast.error('Erro ao restaurar perfis');
+    }
+  };
+
+  const getHighResImage = (photo?: string) => {
+    if (!photo) return '';
+    return photo.replace(/=s\d+(-c)?$/, '=s800-c');
   };
 
   if (loading) {
@@ -178,10 +257,18 @@ export default function Home() {
 
   const currentUser = users[currentIndex];
   const nextUser = users[currentIndex + 1];
+  const canRewind = dislikedUsers.length > 0 || hasSwiped;
 
   return (
     <div className="home-page">
       <div className="home-top-bar">
+        <button
+          className="top-bar-btn rewind-top-btn"
+          onClick={() => setShowDislikedModal(true)}
+        >
+          <span className="btn-icon">⏪</span>
+          Quem não curti {dislikedUsers.length > 0 ? `(${dislikedUsers.length})` : ''}
+        </button>
         <button className="top-bar-btn gold-btn" onClick={() => setShowPremiumAlert(true)}>
           <span className="btn-icon">✨</span> Quem me curtiu
         </button>
@@ -206,10 +293,26 @@ export default function Home() {
               </svg>
             </div>
             <h2>Sem novos perfis por enquanto</h2>
-            <p>Quando novas pessoas se cadastrarem no site, elas aparecerão aqui!</p>
-            <button onClick={loadUsers} className="reload-btn">
-              Buscar novamente
-            </button>
+            <p>
+              {dislikedUsers.length > 0
+                ? `Você passou por ${dislikedUsers.length} ${dislikedUsers.length === 1 ? 'pessoa que não curtiu' : 'pessoas que não curtiu'}. Quer voltar e curtir?`
+                : 'Quando novas pessoas se cadastrarem no site, elas aparecerão aqui!'}
+            </p>
+            <div className="no-users-actions">
+              {canRewind && (
+                <button onClick={handleRewind} className="rewind-empty-btn" disabled={rewinding}>
+                  ⏪ Voltar {dislikedUsers[0]?.name ? `para ${dislikedUsers[0].name.split(' ')[0]}` : 'último perfil'}
+                </button>
+              )}
+              {dislikedUsers.length > 0 && (
+                <button onClick={() => setShowDislikedModal(true)} className="review-disliked-btn">
+                  👀 Ver todos que não curti ({dislikedUsers.length})
+                </button>
+              )}
+              <button onClick={loadUsers} className="reload-btn">
+                🔄 Buscar novamente
+              </button>
+            </div>
           </div>
         ) : (
           <div className="card-stack">
@@ -230,15 +333,22 @@ export default function Home() {
       {currentIndex < users.length && (
         <div className="swipe-actions">
           <button
-            className="action-btn rewind-btn"
+            className={`action-btn rewind-btn ${canRewind ? 'can-rewind' : ''}`}
             onClick={handleRewind}
-            title="Voltar Atras"
-            disabled={!hasSwiped}
-            style={{ opacity: hasSwiped ? 1 : 0.5 }}
+            title={
+              dislikedUsers[0]
+                ? `Voltar para ${dislikedUsers[0].name}`
+                : 'Voltar para a pessoa anterior'
+            }
+            disabled={!canRewind || rewinding}
+            id="rewind-button"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 11l5-5m-5 5l5 5m-5-5h12a5 5 0 015 5v3" />
             </svg>
+            {dislikedUsers.length > 0 && (
+              <span className="rewind-count-badge">{dislikedUsers.length}</span>
+            )}
           </button>
           <button
             className="action-btn dislike-btn"
@@ -270,6 +380,75 @@ export default function Home() {
               <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
             </svg>
           </button>
+        </div>
+      )}
+
+      {/* Modal: Pessoas que você não curtiu mas quer voltar / curtir */}
+      {showDislikedModal && (
+        <div className="premium-modal-overlay" onClick={() => setShowDislikedModal(false)}>
+          <div className="disliked-modal" onClick={e => e.stopPropagation()}>
+            <div className="disliked-modal-header">
+              <div>
+                <h2>⏪ Quem você não curtiu</h2>
+                <p>Volte atrás se passou alguém sem querer!</p>
+              </div>
+              <button className="disliked-close-btn" onClick={() => setShowDislikedModal(false)}>
+                ✕
+              </button>
+            </div>
+
+            {dislikedUsers.length === 0 ? (
+              <div className="disliked-empty">
+                <span>✨</span>
+                <p>Você ainda não recusou ninguém ou já voltou todos os perfis!</p>
+              </div>
+            ) : (
+              <>
+                <div className="disliked-list">
+                  {dislikedUsers.map(u => {
+                    const photo = getHighResImage(u.profilePhoto);
+                    return (
+                      <div key={u.id} className="disliked-item">
+                        <div className="disliked-avatar">
+                          {photo ? (
+                            <img src={photo} alt={u.name} referrerPolicy="no-referrer" />
+                          ) : (
+                            <span>{u.name.charAt(0)}</span>
+                          )}
+                        </div>
+                        <div className="disliked-info">
+                          <h4>{u.name}{u.age ? `, ${u.age}` : ''}</h4>
+                          {u.bio && <p>{u.bio}</p>}
+                        </div>
+                        <div className="disliked-item-actions">
+                          <button
+                            className="disliked-restore-btn"
+                            onClick={() => handleRestoreSpecificUser(u)}
+                            title="Colocar de volta na tela principal"
+                          >
+                            ⏪ Voltar
+                          </button>
+                          <button
+                            className="disliked-like-btn"
+                            onClick={() => handleLikeDirectlyFromDisliked(u)}
+                            title="Curtir agora mesmo"
+                          >
+                            💖 Curtir
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {dislikedUsers.length > 1 && (
+                  <button className="restore-all-btn" onClick={handleRestoreAllDisliked}>
+                    🔄 Voltar todos os {dislikedUsers.length} perfis para a fila
+                  </button>
+                )}
+              </>
+            )}
+          </div>
         </div>
       )}
 

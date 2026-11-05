@@ -76,6 +76,45 @@
   font-size: 15px;
 }
 
+.no-users-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 280px;
+  margin: 0 auto;
+}
+
+.rewind-empty-btn {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #ffffff;
+  padding: 13px 22px;
+  border-radius: var(--radius-full);
+  font-weight: 700;
+  font-size: 14px;
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.35);
+  transition: all 0.2s;
+}
+
+.rewind-empty-btn:hover {
+  transform: translateY(-2px);
+}
+
+.review-disliked-btn {
+  background: #ffffff;
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  padding: 12px 22px;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.review-disliked-btn:hover {
+  border-color: #f59e0b;
+  color: #d97706;
+}
+
 .reload-btn {
   background: var(--primary-gradient);
   color: white;
@@ -127,15 +166,42 @@
 }
 
 .rewind-btn {
+  position: relative;
   color: #f59e0b; /* yellow/gold */
-  width: 48px;
-  height: 48px;
+  width: 52px;
+  height: 52px;
+  opacity: 0.45;
 }
 
-.rewind-btn:hover {
-  background: rgba(245, 158, 11, 0.06);
-  border-color: rgba(245, 158, 11, 0.25);
-  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.12);
+.rewind-btn.can-rewind {
+  opacity: 1;
+  border-color: rgba(245, 158, 11, 0.45);
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  box-shadow: 0 6px 18px rgba(245, 158, 11, 0.25);
+}
+
+.rewind-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-color: #f59e0b;
+  box-shadow: 0 8px 22px rgba(245, 158, 11, 0.35);
+}
+
+.rewind-count-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #f59e0b;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #ffffff;
 }
 
 .dislike-btn {
@@ -242,16 +308,187 @@
   transform: scale(1.02);
 }
 
+.rewind-top-btn {
+  background: linear-gradient(135deg, #fffbeb 0%, #fde68a 100%);
+  color: #92400e;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);
+  font-size: 13px;
+}
+
 .gold-btn {
   background: linear-gradient(135deg, #fef08a 0%, #eab308 100%);
   color: #713f12;
   box-shadow: 0 4px 12px rgba(234, 179, 8, 0.2);
+  font-size: 13px;
 }
 
 .blind-date-btn {
   background: linear-gradient(135deg, #818cf8 0%, #4f46e5 100%);
   color: white;
   box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+  font-size: 13px;
+}
+
+.disliked-modal {
+  background: #ffffff;
+  padding: 24px;
+  border-radius: 24px;
+  max-width: 440px;
+  width: 100%;
+  max-height: 82dvh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.disliked-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.disliked-modal-header h2 {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.disliked-modal-header p {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.disliked-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.disliked-empty {
+  text-align: center;
+  padding: 36px 16px;
+  color: var(--text-muted);
+}
+
+.disliked-empty span {
+  font-size: 36px;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.disliked-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  max-height: 52dvh;
+  padding-right: 4px;
+}
+
+.disliked-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+}
+
+.disliked-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--secondary-gradient);
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.disliked-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.disliked-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.disliked-info h4 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.disliked-info p {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.disliked-item-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.disliked-restore-btn {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  padding: 7px 11px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.disliked-restore-btn:hover {
+  background: #fde68a;
+}
+
+.disliked-like-btn {
+  background: var(--primary-gradient);
+  color: #ffffff;
+  padding: 7px 11px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.disliked-like-btn:hover {
+  transform: scale(1.04);
+}
+
+.restore-all-btn {
+  margin-top: 14px;
+  width: 100%;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #ffffff;
+  padding: 12px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 14px;
 }
 
 .premium-modal-overlay {

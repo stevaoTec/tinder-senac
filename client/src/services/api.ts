@@ -121,6 +121,19 @@ export async function rewindSwipe(): Promise<{ success: boolean; user: User }> {
   return handleResponse<{ success: boolean; user: User }>(res);
 }
 
+export async function getDislikedUsers(): Promise<User[]> {
+  const res = await fetch(`${API_URL}/swipes/disliked`, { headers: getHeaders() });
+  return handleResponse<User[]>(res);
+}
+
+export async function restoreDislikedUser(targetUserId: number | 'all'): Promise<{ success: boolean; user?: User; restoredAll?: boolean }> {
+  const res = await fetch(`${API_URL}/swipes/restore/${targetUserId}`, {
+    method: 'POST',
+    headers: getHeaders()
+  });
+  return handleResponse(res);
+}
+
 // ── Matches ───────────────────────────────────────────
 export async function getMatches(): Promise<Match[]> {
   const res = await fetch(`${API_URL}/matches`, { headers: getHeaders() });
